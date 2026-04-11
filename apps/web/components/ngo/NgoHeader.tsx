@@ -73,6 +73,13 @@ export function NgoHeader() {
           ))}
         </nav>
 
+        <Link
+          href="/map"
+          className="ngo-nav-link"
+          style={{ marginLeft: "auto", opacity: 0.6 }}
+        >
+          ← Map
+        </Link>
 
       </div>
     </header>

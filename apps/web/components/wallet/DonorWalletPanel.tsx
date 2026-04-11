@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useEffect, useMemo, useState } from "react";
 import { parseUnits } from "viem";
@@ -16,6 +17,7 @@ import { TxHistoryCard } from "@/components/wallet/TxHistoryCard";
 import { WalletStatusCard } from "@/components/wallet/WalletStatusCard";
 import { WalletTransactionCard } from "@/components/wallet/WalletTransactionCard";
 import { Button } from "@/components/ui/Button";
+import { formatUsdc } from "@/hooks/usePoolData";
 import { Web3Provider } from "@/providers/Web3Provider";
 import { CHAIN_ID, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
 import { humanityTestnet } from "@/lib/humanity";
@@ -90,10 +92,8 @@ export function DonorWalletPanelInner({
 
   async function sendTx(action: TxAction, request: Parameters<typeof writeContractAsync>[0]) {
     if (!publicClient) throw new Error("Public chain client not ready");
-
     const hash = await writeContractAsync(request);
     pushPending(action, hash);
-
     try {
       await publicClient.waitForTransactionReceipt({ hash });
       markResult(hash, "confirmed");
@@ -106,214 +106,212 @@ export function DonorWalletPanelInner({
   }
 
   async function onApprove() {
-    setError(null);
-    setIsWorking(true);
+    setError(null); setIsWorking(true);
     try {
       if (!USDC_ADDRESS || !VAULT_ADDRESS) throw new Error("Contract addresses are missing.");
       if (parsedAmount <= 0n) throw new Error("Enter a valid amount.");
       await ensureNetwork();
-      await sendTx("approve", {
-        address: USDC_ADDRESS,
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [VAULT_ADDRESS, parsedAmount],
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Approve failed.");
-    } finally {
-      setIsWorking(false);
-    }
+      await sendTx("approve", { address: USDC_ADDRESS, abi: erc20Abi, functionName: "approve", args: [VAULT_ADDRESS, parsedAmount] });
+    } catch (err) { setError(err instanceof Error ? err.message : "Approve failed."); }
+    finally { setIsWorking(false); }
   }
 
   async function onDonate() {
-    setError(null);
-    setIsWorking(true);
+    setError(null); setIsWorking(true);
     try {
       if (!VAULT_ADDRESS) throw new Error("Vault address is missing.");
       if (parsedAmount <= 0n) throw new Error("Enter a valid amount.");
       await ensureNetwork();
-      await sendTx("donate", {
-        address: VAULT_ADDRESS,
-        abi: vaultAbi,
-        functionName: "donate",
-        args: [BigInt(poolId), parsedAmount, toBytes32(memo)],
-      });
+      await sendTx("donate", { address: VAULT_ADDRESS, abi: vaultAbi, functionName: "donate", args: [BigInt(poolId), parsedAmount, toBytes32(memo)] });
       await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Donate failed.");
-    } finally {
-      setIsWorking(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Donate failed."); }
+    finally { setIsWorking(false); }
   }
 
   async function onPayout() {
-    setError(null);
-    setIsWorking(true);
+    setError(null); setIsWorking(true);
     try {
       if (!VAULT_ADDRESS) throw new Error("Vault address is missing.");
-      if (!recipient.startsWith("0x") || recipient.length !== 42) {
-        throw new Error("Enter a valid recipient address.");
-      }
+      if (!recipient.startsWith("0x") || recipient.length !== 42) throw new Error("Enter a valid recipient address.");
       if (parsedAmount <= 0n) throw new Error("Enter a valid amount.");
       await ensureNetwork();
-      await sendTx("payout", {
-        address: VAULT_ADDRESS,
-        abi: vaultAbi,
-        functionName: "payout",
-        args: [BigInt(poolId), recipient as `0x${string}`, parsedAmount, toBytes32(payoutRef)],
-      });
+      await sendTx("payout", { address: VAULT_ADDRESS, abi: vaultAbi, functionName: "payout", args: [BigInt(poolId), recipient as `0x${string}`, parsedAmount, toBytes32(payoutRef)] });
       await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Payout failed.");
-    } finally {
-      setIsWorking(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Payout failed."); }
+    finally { setIsWorking(false); }
   }
 
   if (modal) {
-    return (
-      <div className="bg-zinc-950 text-zinc-100">
-        <div className="px-4 pt-4 pb-3">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Donor Wallet</p>
-              <h1 className="text-base font-semibold tracking-tight text-zinc-50">{title}</h1>
-              {regionId ? (
-                <p className="text-[10px] text-zinc-500">
-                  Region <span className="text-zinc-300">{regionId}</span> · Pool{" "}
-                  <span className="text-zinc-300">{poolId}</span>
-                </p>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
-              <Button variant="ghost" size="sm" onClick={() => refresh()}>Sync</Button>
-            </div>
-          </div>
+    const btnBase = "inline-flex items-center justify-center gap-2 rounded-full border-[3px] border-black/75 px-5 py-2 text-[10px] font-bold uppercase tracking-widest shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-30";
+    const disabled = !isConnected || !isConfigured || isWorking;
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="space-y-3">
-              <WalletStatusCard
-                address={address}
-                chainId={chainId}
-                isConnected={isConnected}
-                isWrongNetwork={isWrongNetwork}
-                isConfigured={isConfigured}
-                usdcAddress={USDC_ADDRESS}
-                vaultAddress={VAULT_ADDRESS}
-                onSwitchNetwork={() => switchChainAsync({ chainId: humanityTestnet.id })}
-                compact
-              />
-              <WalletTransactionCard
-                poolId={poolId}
-                amount={amount}
-                memo={memo}
-                recipient={recipient}
-                payoutRef={payoutRef}
-                error={error}
-                isConnected={isConnected}
-                isConfigured={isConfigured}
-                isWorking={isWorking}
-                poolIdEditable={poolIdEditable}
-                onPoolIdChange={setPoolId}
-                onAmountChange={setAmount}
-                onMemoChange={setMemo}
-                onRecipientChange={setRecipient}
-                onPayoutRefChange={setPayoutRef}
-                onApprove={onApprove}
-                onDonate={onDonate}
-                onPayout={onPayout}
-                compact
-              />
+    return (
+      <div className="p-6 text-zinc-100">
+
+        {/* Header */}
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+              {regionId && (
+                <span className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+                  {regionId}
+                </span>
+              )}
+              <span className="text-zinc-700">·</span>
+              <span className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+                Pool {poolId}
+              </span>
             </div>
-            <div className="space-y-3">
-              <PoolAnalyticsCard
-                poolId={poolId}
-                loading={loading}
-                error={poolError}
-                data={poolStats}
-                onRefresh={refresh}
-                compact
-              />
-              <TxHistoryCard txHistory={history} compact />
+            <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+            <p className="mt-1 text-xs text-zinc-500">{subtitle}</p>
+          </div>
+          <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+        </div>
+
+        {/* Pool stats */}
+        {poolStats && (
+          <div className="mb-5 overflow-hidden rounded-xl border border-zinc-800/70 bg-zinc-900/50">
+            <div className="grid grid-cols-3 divide-x divide-zinc-800/60">
+              {[
+                { label: "Raised",   value: formatUsdc(poolStats.total_donated_raw),  color: "text-emerald-400" },
+                { label: "Paid out", value: formatUsdc(poolStats.total_paid_out_raw), color: "text-sky-400"     },
+                { label: "Balance",  value: formatUsdc(poolStats.net_raw),             color: "text-zinc-100"   },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="px-4 py-3">
+                  <p className="text-[9px] uppercase tracking-widest text-zinc-600">{label}</p>
+                  <p className={`mt-1.5 tabular-nums text-base font-semibold leading-none ${color}`}>{value}</p>
+                  <p className="mt-1 text-[9px] text-zinc-700">USDC</p>
+                </div>
+              ))}
             </div>
           </div>
+        )}
+
+        {/* Wrong network */}
+        {isWrongNetwork && (
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/[0.07] px-4 py-2.5">
+            <p className="text-xs text-amber-400">Wrong network — switch to Humanity Testnet</p>
+            <button
+              onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
+              className="text-xs font-medium text-amber-300 hover:text-amber-200 transition-colors"
+            >
+              Switch →
+            </button>
+          </div>
+        )}
+
+        {/* Form */}
+        <div className="space-y-3">
+          <label className="block">
+            <span className="mb-1.5 block text-[10px] uppercase tracking-widest text-zinc-600">Amount (mUSDC)</span>
+            <div className="relative">
+              <input
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900/60 py-3 pl-4 pr-16 text-2xl font-light tabular-nums text-white placeholder:text-zinc-700 transition-colors focus:border-zinc-600 focus:outline-none"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-zinc-600">USDC</span>
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-[10px] uppercase tracking-widest text-zinc-600">Memo</span>
+            <input
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2.5 text-sm text-zinc-300 placeholder:text-zinc-700 transition-colors focus:border-zinc-600 focus:outline-none"
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+            />
+          </label>
         </div>
+
+        {/* Actions */}
+        <div className="mt-5 flex flex-wrap gap-2.5">
+          <button onClick={onApprove} disabled={disabled} className={`${btnBase} bg-zinc-700 text-white hover:bg-zinc-600`}>
+            {isWorking && <span className="inline-block h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white" />}
+            Approve
+          </button>
+          <button onClick={onDonate} disabled={disabled} className={`${btnBase} bg-zinc-600 text-white hover:bg-zinc-500`}>
+            {isWorking && <span className="inline-block h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white" />}
+            Donate
+          </button>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/[0.07] px-4 py-2.5 text-sm text-rose-300">
+            {error}
+          </p>
+        )}
+
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-        <header className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900/85 p-6 backdrop-blur">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="mb-2 text-xs uppercase tracking-[0.16em] text-zinc-500">Donor Wallet</p>
-              <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">{title}</h1>
-              <p className="mt-2 max-w-2xl text-sm text-zinc-400">{subtitle}</p>
-              {regionId ? (
-                <p className="mt-2 text-xs text-zinc-500">
-                  Region <span className="text-zinc-300">{regionId}</span> maps to Pool{" "}
-                  <span className="text-zinc-300">{poolId}</span>.
-                </p>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-3">
-              <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
-              <Button variant="ghost" size="sm" onClick={() => refresh()}>
-                Sync pool
-              </Button>
-            </div>
-          </div>
-        </header>
+      <main className="mx-auto w-full max-w-5xl px-6 py-10">
 
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
+        {/* Nav */}
+        <div className="mb-9 flex items-center justify-between">
+          <Link
+            href="/map"
+            className="inline-flex items-center gap-1.5 rounded-full border-[3px] border-black/75 bg-zinc-700 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.13)] transition-all duration-150 hover:bg-zinc-600 active:translate-y-px"
+          >
+            ← Back to map
+          </Link>
+          {regionId && (
+            <Link
+              href={`/pool/${regionId}/ledger`}
+              className="text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-300"
+            >
+              View Pool Ledger →
+            </Link>
+          )}
+        </div>
+
+        {/* Header */}
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="mb-2 text-[10px] uppercase tracking-widest text-zinc-600">Donor Wallet</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            <p className="mt-1.5 max-w-lg text-sm text-zinc-400">{subtitle}</p>
+            {regionId && (
+              <p className="mt-2 font-mono text-xs text-zinc-600">
+                Region {regionId}&ensp;·&ensp;Pool {poolId}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+            <Button variant="ghost" size="sm" onClick={() => refresh()}>Sync</Button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="space-y-5 lg:col-span-2">
             <WalletStatusCard
-              address={address}
-              chainId={chainId}
-              isConnected={isConnected}
-              isWrongNetwork={isWrongNetwork}
-              isConfigured={isConfigured}
-              usdcAddress={USDC_ADDRESS}
-              vaultAddress={VAULT_ADDRESS}
+              address={address} chainId={chainId} isConnected={isConnected}
+              isWrongNetwork={isWrongNetwork} isConfigured={isConfigured}
+              usdcAddress={USDC_ADDRESS} vaultAddress={VAULT_ADDRESS}
               onSwitchNetwork={() => switchChainAsync({ chainId: humanityTestnet.id })}
             />
-
             <WalletTransactionCard
-              poolId={poolId}
-              amount={amount}
-              memo={memo}
-              recipient={recipient}
-              payoutRef={payoutRef}
-              error={error}
-              isConnected={isConnected}
-              isConfigured={isConfigured}
-              isWorking={isWorking}
-              poolIdEditable={poolIdEditable}
-              onPoolIdChange={setPoolId}
-              onAmountChange={setAmount}
-              onMemoChange={setMemo}
-              onRecipientChange={setRecipient}
-              onPayoutRefChange={setPayoutRef}
-              onApprove={onApprove}
-              onDonate={onDonate}
-              onPayout={onPayout}
+              poolId={poolId} amount={amount} memo={memo} recipient={recipient}
+              payoutRef={payoutRef} error={error} isConnected={isConnected}
+              isConfigured={isConfigured} isWorking={isWorking} poolIdEditable={poolIdEditable}
+              onPoolIdChange={setPoolId} onAmountChange={setAmount} onMemoChange={setMemo}
+              onRecipientChange={setRecipient} onPayoutRefChange={setPayoutRef}
+              onApprove={onApprove} onDonate={onDonate} onPayout={onPayout}
             />
           </div>
-
-          <div className="space-y-6">
-            <PoolAnalyticsCard
-              poolId={poolId}
-              loading={loading}
-              error={poolError}
-              data={poolStats}
-              onRefresh={refresh}
-            />
+          <div className="space-y-5">
+            <PoolAnalyticsCard poolId={poolId} loading={loading} error={poolError} data={poolStats} onRefresh={refresh} />
             <TxHistoryCard txHistory={history} />
           </div>
         </section>
+
       </main>
     </div>
   );

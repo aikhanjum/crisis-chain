@@ -141,11 +141,11 @@ function MapPageInner() {
 
       {/* Donate modal overlay */}
       {donateRegionId && (
-        <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="relative w-full max-w-5xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl mx-4">
+        <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg rounded-2xl border border-zinc-800/80 bg-zinc-950 shadow-[0_24px_64px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.05)] mx-4">
             <button
               onClick={() => setDonateRegionId(null)}
-              className="absolute top-4 right-4 z-10 rounded-md p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+              className="absolute top-4 right-4 z-10 rounded-lg p-1.5 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors"
               aria-label="Close donate panel"
             >
               <X className="h-5 w-5" />

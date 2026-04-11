@@ -36,12 +36,8 @@ function CopyableHash({ value }: { value: string }) {
   }, [value]);
 
   return (
-    <button
-      onClick={copy}
-      className="group/copy flex items-center gap-1 text-left"
-      title={`Click to copy: ${value}`}
-    >
-      <span className="font-mono text-[11px] text-zinc-400 transition-colors group-hover/copy:text-zinc-200">
+    <button onClick={copy} className="group/copy flex items-center gap-1" title={value}>
+      <span className="font-mono text-[11px] text-zinc-400 transition-colors group-hover/copy:text-zinc-100">
         {shorten(value)}
       </span>
       <span className="opacity-0 transition-opacity group-hover/copy:opacity-100">
@@ -60,11 +56,10 @@ function LedgerInner() {
   const poolId = regionData?.poolId ?? poolIdFromRegionId(regionId);
 
   const { data: ledger, isLoading: ledgerLoading, error: ledgerError } = usePoolLedger(poolId);
-  const statsLoading = ledgerLoading;
   const stats = ledger ? {
-    total_donated_raw: ledger.totalDonatedRaw,
+    total_donated_raw:  ledger.totalDonatedRaw,
     total_paid_out_raw: ledger.totalPaidOutRaw,
-    net_raw: ledger.netRaw,
+    net_raw:            ledger.netRaw,
   } : null;
 
   const rows = useMemo<MergedRow[]>(() => {
@@ -85,49 +80,50 @@ function LedgerInner() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      <div className="mx-auto max-w-3xl px-4 py-12">
+      <div className="mx-auto max-w-3xl px-6 py-12">
 
         {/* Header */}
-        <div className="mb-9">
-          <Link href="/map" className="text-xs text-zinc-600 transition-colors hover:text-zinc-400">
-            ← Back to map
-          </Link>
-          <h1 className="mt-4 text-xl font-semibold tracking-tight">Pool Ledger</h1>
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <span className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
-              {shorten(regionId, 8, 6)}
-            </span>
-            <span className="text-zinc-700">·</span>
-            <span className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
-              {shorten(poolId, 8, 6)}
-            </span>
-            <span className="text-zinc-700">·</span>
-            <span className="text-[10px] text-zinc-600">all transactions on-chain</span>
+        <Link href="/map" className="inline-flex items-center gap-1.5 rounded-full border-[3px] border-black/75 bg-zinc-700 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.13)] transition-all duration-150 hover:bg-zinc-600 active:translate-y-px">
+          ← Back to map
+        </Link>
+
+        <div className="mt-5 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Pool Ledger</h1>
+            <p className="mt-1.5 font-mono text-xs text-zinc-600">
+              {shorten(regionId, 8, 6)}&ensp;·&ensp;{shorten(poolId, 8, 6)}
+            </p>
+          </div>
+          <div className="mt-1 flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+            <span className="text-[9px] font-medium uppercase tracking-widest text-emerald-500">live</span>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="mb-8 grid grid-cols-3 gap-3">
-          {[
-            { label: "Total Raised",   value: stats ? formatUsdc(stats.total_donated_raw)  : "—", color: "text-emerald-400" },
-            { label: "Disbursed",      value: stats ? formatUsdc(stats.total_paid_out_raw) : "—", color: "text-sky-400"     },
-            { label: "Net Balance",    value: stats ? formatUsdc(stats.net_raw)             : "—", color: "text-zinc-100"   },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="rounded-xl border border-zinc-800/70 bg-zinc-900/50 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-600">{label}</p>
-              <p className={`mt-2 text-xl font-light tabular-nums leading-none ${color}`}>
-                {statsLoading ? <span className="text-zinc-700">…</span> : value}
-              </p>
-              <p className="mt-1 text-[10px] text-zinc-700">USDC</p>
-            </div>
-          ))}
+        {/* Stats — unified card */}
+        <div className="mt-8 overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="grid grid-cols-3 divide-x divide-zinc-800/60">
+            {[
+              { label: "Total Raised",   value: stats ? formatUsdc(stats.total_donated_raw)  : null, color: "text-emerald-400" },
+              { label: "Disbursed",      value: stats ? formatUsdc(stats.total_paid_out_raw) : null, color: "text-sky-400"     },
+              { label: "Net Balance",    value: stats ? formatUsdc(stats.net_raw)             : null, color: "text-zinc-100"   },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="px-6 py-5">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-600">{label}</p>
+                <p className={`mt-3 text-2xl font-light tabular-nums leading-none ${color}`}>
+                  {ledgerLoading ? <span className="text-zinc-700">…</span> : (value ?? "—")}
+                </p>
+                <p className="mt-1.5 text-[10px] text-zinc-700">USDC</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Table */}
-        <div className="overflow-hidden rounded-xl border border-zinc-800/70 bg-zinc-900/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800/70 bg-zinc-900/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
 
-          {/* Column headers */}
-          <div className="grid grid-cols-[2.5rem_1fr_6rem_4rem] gap-4 border-b border-zinc-800/60 px-5 py-3">
+          {/* Header row */}
+          <div className="grid grid-cols-[2.5rem_1fr_7rem_4rem] gap-4 border-b border-zinc-800/60 px-5 py-3.5">
             <span />
             <span className="text-[10px] uppercase tracking-widest text-zinc-600">Transaction</span>
             <span className="text-right text-[10px] uppercase tracking-widest text-zinc-600">Amount</span>
@@ -136,7 +132,7 @@ function LedgerInner() {
 
           {/* Loading */}
           {ledgerLoading && (
-            <div className="flex flex-col items-center gap-3 px-5 py-14">
+            <div className="flex flex-col items-center gap-3 py-16">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
               <p className="text-xs text-zinc-600">Loading ledger…</p>
             </div>
@@ -144,14 +140,14 @@ function LedgerInner() {
 
           {/* Error */}
           {ledgerError && (
-            <p className="px-5 py-14 text-center text-xs text-red-400/70">
+            <p className="py-16 text-center text-xs text-red-400/60">
               Could not load ledger. Check API gateway + indexer.
             </p>
           )}
 
           {/* Empty */}
           {!ledgerLoading && !ledgerError && rows.length === 0 && (
-            <p className="px-5 py-14 text-center text-xs text-zinc-600">
+            <p className="py-16 text-center text-xs text-zinc-600">
               No transactions indexed for this pool yet.
             </p>
           )}
@@ -162,7 +158,13 @@ function LedgerInner() {
             return (
               <div
                 key={`${row.txHash}-${i}`}
-                className="group grid grid-cols-[2.5rem_1fr_6rem_4rem] items-center gap-4 border-b border-zinc-800/40 px-5 py-4 transition-colors last:border-b-0 hover:bg-white/[0.02]"
+                className={[
+                  "group grid grid-cols-[2.5rem_1fr_7rem_4rem] items-center gap-4 border-b px-5 py-4",
+                  "border-b-zinc-800/40 transition-colors last:border-b-0 hover:bg-white/[0.025]",
+                  isDonation
+                    ? "border-l-[2px] border-l-emerald-500/20 hover:border-l-emerald-500/40"
+                    : "border-l-[2px] border-l-sky-500/20 hover:border-l-sky-500/40",
+                ].join(" ")}
               >
                 {/* Type icon */}
                 <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${
@@ -175,7 +177,6 @@ function LedgerInner() {
 
                 {/* Main cell */}
                 <div className="min-w-0 flex flex-col gap-1">
-                  {/* Tx hash + explorer link */}
                   <div className="flex items-center gap-1.5">
                     {row.txHash
                       ? <CopyableHash value={row.txHash} />
@@ -188,12 +189,10 @@ function LedgerInner() {
                         title="View on explorer"
                         className="opacity-0 transition-opacity group-hover:opacity-100"
                       >
-                        <ExternalLink className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                        <ExternalLink className="h-3 w-3 text-zinc-600 hover:text-zinc-300" />
                       </a>
                     )}
                   </div>
-
-                  {/* Actor */}
                   <div className="flex items-center gap-1.5">
                     <span className={`text-[9px] font-semibold uppercase tracking-wider ${
                       isDonation ? "text-emerald-700" : "text-sky-700"
@@ -202,8 +201,6 @@ function LedgerInner() {
                     </span>
                     <span className="font-mono text-[11px] text-zinc-600">{shorten(row.actor)}</span>
                   </div>
-
-                  {/* Memo */}
                   {row.memo && (
                     <span className="truncate text-[10px] italic text-zinc-700">{row.memo}</span>
                   )}
@@ -211,7 +208,7 @@ function LedgerInner() {
 
                 {/* Amount */}
                 <div className="text-right">
-                  <span className={`tabular-nums text-sm font-medium ${
+                  <span className={`tabular-nums text-base font-semibold ${
                     isDonation ? "text-emerald-400" : "text-sky-400"
                   }`}>
                     {formatUsdc(row.amount)}
@@ -231,19 +228,23 @@ function LedgerInner() {
         </div>
 
         {/* Footer */}
-        <div className="mt-5 flex justify-between text-[11px] text-zinc-600">
-          <Link href={`/donate/${regionId}`} className="transition-colors hover:text-zinc-400">
+        <div className="mt-6 flex items-center justify-between gap-4">
+          <Link
+            href={`/donate/${regionId}`}
+            className="inline-flex items-center gap-1.5 rounded-full border-[3px] border-black/75 bg-zinc-700 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.13)] transition-all duration-150 hover:bg-zinc-600 active:translate-y-px"
+          >
             Donate to this pool →
           </Link>
           <a
             href={EXPLORER_BASE_URL.replace(/\/$/, "")}
             target="_blank"
             rel="noopener noreferrer"
-            className="underline underline-offset-2 transition-colors hover:text-zinc-400"
+            className="text-[11px] text-zinc-600 underline underline-offset-2 transition-colors hover:text-zinc-400"
           >
             Explorer ↗
           </a>
         </div>
+
       </div>
     </div>
   );
