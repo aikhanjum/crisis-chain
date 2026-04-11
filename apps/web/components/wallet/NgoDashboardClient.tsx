@@ -276,7 +276,51 @@ function NgoDashboardInner() {
           Switch network
         </button>
       )}
-      <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+      <ConnectButton.Custom>
+        {({ account, chain, openAccountModal, openConnectModal, mounted }) => {
+          const connected = mounted && account && chain;
+          return (
+            <button
+              type="button"
+              onClick={connected ? openAccountModal : openConnectModal}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "7px 12px",
+                borderRadius: 5,
+                backgroundColor: "var(--bg)",
+                color: connected ? "var(--text-hi)" : "var(--text-mid)",
+                fontSize: "var(--fs-ui)",
+                fontWeight: connected ? 400 : 600,
+                border: "1px solid var(--border)",
+                cursor: "pointer",
+                fontFamily: connected ? "var(--font-mono)" : "inherit",
+                transition: "border-color 0.1s, background-color 0.1s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--surface-hover)";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-mid)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--bg)";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)";
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  backgroundColor: connected ? "var(--fulfilled)" : "var(--text-vlo)",
+                  flexShrink: 0,
+                }}
+              />
+              {connected ? account.displayName : "Connect Wallet"}
+            </button>
+          );
+        }}
+      </ConnectButton.Custom>
       {isConnected && !isAuthenticated ? (
         <button
           type="button"

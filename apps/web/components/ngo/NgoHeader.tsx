@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -40,6 +41,28 @@ export function NgoHeader({ rightSlot }: { rightSlot?: React.ReactNode }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <Link
+            href="/map"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: "var(--fs-ui)",
+              fontWeight: 600,
+              color: "var(--text-lo)",
+              textDecoration: "none",
+              padding: "5px 10px",
+              borderRadius: 5,
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--bg)",
+            }}
+          >
+            <ArrowLeft style={{ width: 13, height: 13 }} />
+            Map
+          </Link>
+
+          <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
+
           <Link
             href="/ngo/dashboard"
             style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12, textDecoration: "none" }}
