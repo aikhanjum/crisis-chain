@@ -10,7 +10,7 @@ import poolRouter from "./routes/pool";
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
 
-app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:3000" }));
+app.use(cors({ origin: process.env.FRONTEND_URL ?? /^http:\/\/localhost(:\d+)?$/ }));
 app.use(express.json());
 
 // --- Auth routes ---
@@ -20,11 +20,15 @@ app.get("/auth/nonce", (req, res) => {
   res.json({ nonce: generateNonce(address) });
 });
 
-app.post("/auth/verify", (req, res) => {
+app.post("/auth/verify", async (req, res) => {
   const { address, signature, nonce } = req.body;
-  const token = verifyAndIssueToken(address, signature, nonce);
-  if (!token) return res.status(401).json({ error: "Invalid signature or nonce" });
-  res.json({ token });
+  try {
+    const token = await verifyAndIssueToken(address, signature, nonce);
+    if (!token) return res.status(401).json({ error: "Invalid signature or nonce" });
+    res.json({ token });
+  } catch {
+    res.status(401).json({ error: "Signature verification failed" });
+  }
 });
 
 // --- Resource routes ---

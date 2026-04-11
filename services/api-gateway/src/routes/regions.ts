@@ -123,12 +123,12 @@ router.get("/:id/ledger", async (req, res) => {
     const poolId = req.params.id;
     const [donations, payouts] = await Promise.all([
       query(
-        `SELECT tx_hash, block_number, donor AS actor, amount_raw AS amount, memo, created_at AS timestamp
+        `SELECT tx_hash, block_number, donor AS actor, amount_raw AS amount, memo
          FROM donations WHERE pool_id = $1 ORDER BY block_number DESC`,
         [poolId],
       ),
       query(
-        `SELECT tx_hash, block_number, recipient AS actor, amount_raw AS amount, payout_ref, created_at AS timestamp
+        `SELECT tx_hash, block_number, recipient AS actor, amount_raw AS amount, payout_ref
          FROM payouts WHERE pool_id = $1 ORDER BY block_number DESC`,
         [poolId],
       ),

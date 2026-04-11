@@ -8,10 +8,13 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@types/multer": "^2.1.0",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.1",
     "pg": "^8.13.1",
+    "viem": "^2.47.12",
     "ws": "^8.18.0",
     "zod": "^3.23.8"
   },
