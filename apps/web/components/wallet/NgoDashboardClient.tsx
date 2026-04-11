@@ -1,11 +1,11 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowUpRight, CheckCircle2, CircleDollarSign, CircleDot, Clock, Loader2, Plus, ThumbsUp } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { formatUnits } from "viem";
 import { useAccount, useChainId, useReadContract, useSwitchChain } from "wagmi";
 
@@ -13,7 +13,7 @@ import { Web3Provider } from "@/providers/Web3Provider";
 import { CHAIN_ID, EXPLORER_BASE_URL, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
 import { humanityTestnet } from "@/lib/humanity";
 import { erc20Abi } from "@/lib/wallet-contracts";
-import { getNgoQueue, getPoolLedger, getPoolStats, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
+import { getNgoQueue, getPoolLedger, getPoolStats, approveReceipt, requestReimbursement, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
 import { poolIdFromRegionId, shortenAddress } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth } from "@/hooks/useWallet";
@@ -25,7 +25,7 @@ const NAV = [
 
 type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
 
-const COL = "3.5rem 4rem 1fr 8.5rem 8rem 2.5rem";
+const COL = "3.5rem 4rem 1fr 8.5rem 8rem 6rem 2.5rem";
 
 const subLabel: React.CSSProperties = {
   fontSize: "var(--fs-xs)",
@@ -80,7 +80,10 @@ function NgoDashboardInner() {
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const { token, login, loading: authLoading, isAuthenticated } = useNgoAuth();
+  const queryClient = useQueryClient();
   const [authError, setAuthError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<{ id: string; message: string; type: "success" | "error" } | null>(null);
 
   const { data: regions = [], isLoading: regionsLoading, error: regionsError } = useCrisisRegions();
 
@@ -176,20 +179,24 @@ function NgoDashboardInner() {
         const ui = mapReceiptStatus(r.status);
         return {
           id: r.id.slice(0, 8),
+          fullId: r.id,
           date: new Date(r.submitted_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
           desc: r.item_notes || "Receipt request",
           usdc: Number(r.requested_amount),
           status: ui,
+          rawStatus: r.status,
           tx: r.payout_tx_hash,
         };
       });
     }
     return onChainPayouts.map((r) => ({
       id: r.id,
+      fullId: null as string | null,
       date: r.date,
       desc: r.desc,
       usdc: r.usdc,
       status: r.status,
+      rawStatus: "paid" as const,
       tx: r.tx,
     }));
   }, [isAuthenticated, queue, onChainPayouts]);
@@ -251,6 +258,36 @@ function NgoDashboardInner() {
       setAuthError(e instanceof Error ? e.message : "Sign-in failed");
     }
   }
+
+  const onApproveReceipt = useCallback(async (receiptId: string) => {
+    if (!token) return;
+    setActionLoading(receiptId);
+    setActionResult(null);
+    try {
+      await approveReceipt(receiptId, token);
+      setActionResult({ id: receiptId, message: "Receipt approved", type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["ngoQueue"] });
+    } catch (e) {
+      setActionResult({ id: receiptId, message: e instanceof Error ? e.message : "Approve failed", type: "error" });
+    } finally {
+      setActionLoading(null);
+    }
+  }, [token, queryClient]);
+
+  const onReimburse = useCallback(async (receiptId: string) => {
+    if (!token) return;
+    setActionLoading(receiptId);
+    setActionResult(null);
+    try {
+      const result = await requestReimbursement(receiptId, token);
+      setActionResult({ id: receiptId, message: `Paid — tx: ${result.txHash?.slice(0, 10)}…`, type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["ngoQueue"] });
+    } catch (e) {
+      setActionResult({ id: receiptId, message: e instanceof Error ? e.message : "Reimbursement failed", type: "error" });
+    } finally {
+      setActionLoading(null);
+    }
+  }, [token, queryClient]);
 
   const walletLabel = isConnected && address ? shortenAddress(address) : "Not connected";
   const balanceLabel =
@@ -421,6 +458,15 @@ function NgoDashboardInner() {
         {authError ? (
           <p style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px", fontSize: "var(--fs-xs)", color: "var(--open)" }}>
             {authError}
+          </p>
+        ) : null}
+        {actionResult ? (
+          <p style={{
+            maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px",
+            fontSize: "var(--fs-xs)",
+            color: actionResult.type === "success" ? "var(--fulfilled)" : "var(--open)",
+          }}>
+            {actionResult.message}
           </p>
         ) : null}
       </header>
@@ -618,6 +664,7 @@ function NgoDashboardInner() {
                   <span>Item</span>
                   <span style={{ textAlign: "right" }}>Amount</span>
                   <span style={{ textAlign: "center" }}>Status</span>
+                  <span style={{ textAlign: "center" }}>Action</span>
                   <span />
                 </div>
 
@@ -674,6 +721,45 @@ function NgoDashboardInner() {
                         <StatusIcon status={tx.status} />
                         {chipLabel(tx.status)}
                       </span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                      {tx.fullId && tx.rawStatus === "pending" ? (
+                        <button
+                          type="button"
+                          disabled={actionLoading === tx.fullId}
+                          onClick={() => onApproveReceipt(tx.fullId!)}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "4px 10px", borderRadius: 4, border: "1px solid var(--fulfilled-border)",
+                            backgroundColor: "var(--fulfilled-bg)", color: "var(--fulfilled)",
+                            fontSize: "var(--fs-xs)", fontWeight: 600, cursor: actionLoading === tx.fullId ? "wait" : "pointer",
+                          }}
+                        >
+                          {actionLoading === tx.fullId
+                            ? <Loader2 style={{ width: 11, height: 11, animation: "spin 1s linear infinite" }} />
+                            : <ThumbsUp style={{ width: 11, height: 11 }} />}
+                          Approve
+                        </button>
+                      ) : tx.fullId && tx.rawStatus === "approved" ? (
+                        <button
+                          type="button"
+                          disabled={actionLoading === tx.fullId}
+                          onClick={() => onReimburse(tx.fullId!)}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border, var(--border))",
+                            backgroundColor: "var(--accent-lo)", color: "var(--accent-text)",
+                            fontSize: "var(--fs-xs)", fontWeight: 600, cursor: actionLoading === tx.fullId ? "wait" : "pointer",
+                          }}
+                        >
+                          {actionLoading === tx.fullId
+                            ? <Loader2 style={{ width: 11, height: 11, animation: "spin 1s linear infinite" }} />
+                            : <CircleDollarSign style={{ width: 11, height: 11 }} />}
+                          Reimburse
+                        </button>
+                      ) : (
+                        <span style={{ color: "var(--text-vlo)", fontSize: "var(--fs-xs)" }}>—</span>
+                      )}
                     </div>
                     <div style={{ display: "flex", justifyContent: "center" }}>
                       {tx.tx ? (
