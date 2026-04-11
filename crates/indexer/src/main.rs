@@ -16,6 +16,7 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, Row};
 use tokio::signal;
 use tokio::task::JoinHandle;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 
 const STATE_ROW_ID: i16 = 1;
@@ -97,9 +98,15 @@ async fn main() -> Result<()> {
 }
 
 fn build_router(state: AppState) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     Router::new()
         .route("/health", get(health))
         .route("/pools/{pool_id}", get(get_pool))
+        .layer(cors)
         .with_state(Arc::new(state))
 }
 

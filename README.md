@@ -4,6 +4,7 @@ Monorepo for:
 
 - `contracts/`: Foundry Solidity contracts for donation pools and payouts.
 - `crates/indexer/`: Rust service that indexes contract events into PostgreSQL and exposes a read API.
+- `apps/wallet/`: Next.js wallet UI for approve/donate/payout demo on Humanity testnet.
 
 ## Structure
 
@@ -13,6 +14,7 @@ Monorepo for:
 - `contracts/script/Deploy.s.sol`: vault deployment script
 - `contracts/script/DeployMockUSDC.s.sol`: mock token deployment script
 - `crates/indexer/src/main.rs`: indexer + HTTP API entrypoint
+- `apps/wallet/app/page.tsx`: wallet demo entrypoint
 - `migrations/0001_init.sql`: PostgreSQL schema
 - `.env.example`: required configuration
 
@@ -66,7 +68,7 @@ source /Users/aikhan/.zshenv
 forge script contracts/script/DeployMockUSDC.s.sol:DeployMockUSDC \
   --rpc-url "$RPC_URL" \
   --broadcast
-````
+```
 
 Copy the logged token address into `USDC_ADDRESS` in `.env`.
 
@@ -157,6 +159,48 @@ Expected `pools/1` fields:
 - `total_donated_raw`
 - `total_paid_out_raw`
 - `net_raw`
+
+## Wallet demo app (`apps/wallet`)
+
+### Wallet env setup
+
+Copy `apps/wallet/.env.example` to `apps/wallet/.env.local` and fill:
+
+- `NEXT_PUBLIC_CHAIN_ID=7080969`
+- `NEXT_PUBLIC_RPC_URL`: Humanity testnet RPC URL
+- `NEXT_PUBLIC_USDC_ADDRESS`: deployed `MockUSDC` (or test token) address
+- `NEXT_PUBLIC_VAULT_ADDRESS`: deployed `CrisisPoolVault` address
+- `NEXT_PUBLIC_EXPLORER_BASE_URL`: Humanity explorer base URL
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:3000`
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`: WalletConnect Cloud project ID
+
+### Startup order (full demo)
+
+1. Start Postgres
+2. Start Rust indexer API
+3. Start wallet frontend
+
+```bash
+docker compose up -d postgres
+source "$HOME/.cargo/env"
+cargo run -p indexer
+```
+
+In a second terminal:
+
+```bash
+cd apps/wallet
+npm install
+npm run dev
+```
+
+### Demo checklist
+
+- Connect wallet in `apps/wallet` and confirm chain badge says `(ok)`.
+- Run `Approve`, then `Donate`, then `Payout`.
+- Confirm each transaction appears in session history with explorer link.
+- Click `Refresh` in Pool Analytics and verify totals match your expected math.
+- Verify API directly with `curl "http://localhost:3000/pools/<pool_id>"`.
 
 ## Security notes for v1
 
