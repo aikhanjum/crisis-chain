@@ -1,6 +1,8 @@
 {
   "dependencies": {
-    "mapbox-gl": "^3.21.0"
+    "@tailwindcss/postcss": "^4.2.2",
+    "mapbox-gl": "^3.21.0",
+    "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
     "@types/mapbox-gl": "^3.4.1"
