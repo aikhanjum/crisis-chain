@@ -19,7 +19,7 @@ export function CrisisDrawer({ region, onClose, onDonate }: CrisisDrawerProps) {
   if (!region) return null;
 
   return (
-    <div className="absolute right-4 top-4 z-[1000] w-80 flex flex-col gap-3">
+    <div className="absolute right-4 top-[calc(theme(spacing.14)+theme(spacing.4))] z-[1000] w-80 flex flex-col gap-3">
       <Card className="border-stone-800 bg-stone-900">
         <div className="flex items-start justify-between gap-2">
           <div>

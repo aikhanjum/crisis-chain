@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 
+import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
 import { API_GATEWAY_URL } from "@/lib/constants";
 import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
@@ -274,7 +275,7 @@ function SubmitInner() {
 
 export default function NgoSubmitClient() {
   return (
-    <Web3Provider>
+    <Web3Provider theme={darkTheme()}>
       <SubmitInner />
     </Web3Provider>
   );

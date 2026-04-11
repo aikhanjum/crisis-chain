@@ -13,64 +13,68 @@
   --fs-count: 1.5rem;     /* 24px — stat count numbers                     */
   --fs-hero:  2.25rem;    /* 36px — primary balance figure                 */
 
-  /* ── Backgrounds — warm off-white, hue 65 (tinted toward terracotta) */
-  --bg:            oklch(97%   0.007 65);
-  --surface:       oklch(99.5% 0.003 65);
-  --surface-hover: oklch(95.5% 0.010 65);
+  /* ── Backgrounds — dark warm neutral (hue 65, terracotta family) ─ */
+  --bg:            oklch(17%   0.008 65);
+  --surface:       oklch(21.5% 0.011 65);
+  --surface-hover: oklch(27%   0.014 65);
 
   /* ── Borders ────────────────────────────────────────────────────── */
-  --border-faint: oklch(91%  0.011 65);
-  --border:       oklch(85%  0.013 65);
-  --border-mid:   oklch(75%  0.015 65);
+  --border-faint: oklch(30%  0.012 65);
+  --border:       oklch(38%  0.014 65);
+  --border-mid:   oklch(50%  0.016 65);
 
-  /* ── Text — warm near-black, same hue family as accent ─────────── */
-  --text-hi:  oklch(16%  0.008 28);
-  --text-mid: oklch(40%  0.009 28);
-  --text-lo:  oklch(56%  0.008 28);
-  --text-vlo: oklch(70%  0.007 28);
+  /* ── Text — light on dark ───────────────────────────────────────── */
+  --text-hi:  oklch(96%  0.004 65);
+  --text-mid: oklch(78%  0.008 28);
+  --text-lo:  oklch(62%  0.008 28);
+  --text-vlo: oklch(48%  0.006 28);
 
-  /* ── Accent: terracotta, darkened for light-mode contrast ──────── */
-  --accent:      oklch(47%   0.14  28);
-  --accent-dark: oklch(40%   0.14  28);
-  --accent-lo:   oklch(94%   0.05  28);
-  --accent-text: oklch(44%   0.13  28);
-  --accent-fg:   oklch(99%   0.003 65);  /* text on filled terracotta button */
+  /* ── Accent: terracotta (brighter for dark canvas) ─────────────── */
+  --accent:      oklch(62%   0.13  28);
+  --accent-dark: oklch(54%   0.13  28);
+  --accent-lo:   oklch(26%   0.05  28);
+  --accent-text: oklch(72%   0.11  28);
+  --accent-fg:   oklch(98%   0.005 65);  /* text on filled terracotta button */
 
   /* ── Pool visualization — two-segment bar ──────────────────────── */
-  --pool-committed:    oklch(44% 0.09 225);   /* steel blue  — transacted/locked  */
-  --pool-committed-bg: oklch(95% 0.025 225);
-  --pool-in:           oklch(44% 0.09 155);   /* sage green  — waiting in pool    */
-  --pool-in-bg:        oklch(95% 0.03  155);
+  --pool-committed:    oklch(62% 0.10 225);   /* steel blue  — transacted/locked  */
+  --pool-committed-bg: oklch(22% 0.04 225);
+  --pool-in:           oklch(62% 0.10 155);   /* sage green  — waiting in pool    */
+  --pool-in-bg:        oklch(22% 0.035 155);
 
   /* ── IPC food security severity (non-red scale) ─────────────────── */
-  --ipc-5:        oklch(38% 0.13 305);   /* deep plum  — Famine    */
-  --ipc-5-bg:     oklch(97% 0.03 305);
-  --ipc-5-border: oklch(83% 0.06 305);
-  --ipc-4:        oklch(47% 0.14 55);    /* amber       — Emergency */
-  --ipc-4-bg:     oklch(97% 0.04 55);
-  --ipc-4-border: oklch(86% 0.07 55);
-  --ipc-3:        oklch(44% 0.10 100);   /* olive       — Crisis    */
-  --ipc-3-bg:     oklch(97% 0.03 100);
-  --ipc-3-border: oklch(87% 0.06 100);
+  --ipc-5:        oklch(72% 0.12 305);   /* deep plum  — Famine    */
+  --ipc-5-bg:     oklch(22% 0.05 305);
+  --ipc-5-border: oklch(40% 0.08 305);
+  --ipc-4:        oklch(78% 0.14 55);    /* amber       — Emergency */
+  --ipc-4-bg:     oklch(24% 0.06 55);
+  --ipc-4-border: oklch(42% 0.09 55);
+  --ipc-3:        oklch(70% 0.11 100);   /* olive       — Crisis    */
+  --ipc-3-bg:     oklch(23% 0.04 100);
+  --ipc-3-border: oklch(40% 0.07 100);
 
   /* ── Hero section ───────────────────────────────────────────────── */
-  --hero-bg:     oklch(96.5% 0.012 60);
-  --hero-border: oklch(89%   0.018 60);
+  --hero-bg:     oklch(19% 0.014 60);
+  --hero-border: oklch(32% 0.018 60);
 
   /* ── Card elevation ─────────────────────────────────────────────── */
-  --shadow-card:       0 1px 3px oklch(0% 0 0 / 0.06), 0 1px 2px oklch(0% 0 0 / 0.04);
-  --shadow-card-hover: 0 4px 12px oklch(0% 0 0 / 0.08);
+  --shadow-card:       0 1px 3px oklch(0% 0 0 / 0.35), 0 1px 2px oklch(0% 0 0 / 0.22);
+  --shadow-card-hover: 0 4px 14px oklch(0% 0 0 / 0.45);
 
-  /* ── Status — darkened for light-mode text legibility ──────────── */
-  --open:              oklch(50%  0.15  48);
-  --open-bg:           oklch(97%  0.05  48);
-  --open-border:       oklch(84%  0.08  48);
-  --pending:           oklch(46%  0.12  78);
-  --pending-bg:        oklch(97%  0.04  78);
-  --pending-border:    oklch(86%  0.07  78);
-  --fulfilled:         oklch(38%  0.12  148);
-  --fulfilled-bg:      oklch(97%  0.04  148);
-  --fulfilled-border:  oklch(83%  0.07  148);
+  /* ── Inline alerts ──────────────────────────────────────────────── */
+  --error:   oklch(72% 0.16 25);
+  --success: oklch(72% 0.14 150);
+
+  /* ── Status — tuned for dark surfaces ──────────────────────────── */
+  --open:              oklch(78%  0.14  48);
+  --open-bg:           oklch(24%  0.06  48);
+  --open-border:       oklch(40%  0.10  48);
+  --pending:           oklch(76%  0.11  78);
+  --pending-bg:        oklch(24%  0.05  78);
+  --pending-border:    oklch(40%  0.08  78);
+  --fulfilled:         oklch(72%  0.12  148);
+  --fulfilled-bg:      oklch(23%  0.05  148);
+  --fulfilled-border:  oklch(38%  0.08  148);
 
   /* ── Base ───────────────────────────────────────────────────────── */
   min-height: 100dvh;
@@ -163,6 +167,7 @@
 .ngo-nav-link-active {
   color: var(--text-hi) !important;
   font-weight: 500;
+  background-color: var(--surface-hover);
 }
 
 /* ── Region overview grid ───────────────────────────────────────────── */

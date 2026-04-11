@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { CheckCircle2, Loader2 } from "lucide-react";
 
+import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
 import { API_GATEWAY_URL } from "@/lib/constants";
 import { shortenAddress } from "@/lib/wallet-utils";
@@ -248,7 +249,7 @@ function RegisterInner() {
 
 export default function NgoRegisterClient() {
   return (
-    <Web3Provider>
+    <Web3Provider theme={darkTheme()}>
       <RegisterInner />
     </Web3Provider>
   );

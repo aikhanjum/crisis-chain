@@ -1,6 +1,6 @@
 "use client";
 
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { ConnectButton, darkTheme } from "@rainbow-me/rainbowkit";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -418,11 +418,11 @@ function NgoDashboardInner() {
                 style={{
                   padding: "6px 12px",
                   borderRadius: 5,
-                  backgroundColor: "var(--pending)",
-                  color: "#111",
+                  backgroundColor: "var(--pending-bg)",
+                  color: "var(--pending)",
                   fontSize: "var(--fs-xs)",
                   fontWeight: 600,
-                  border: "none",
+                  border: "1px solid var(--pending-border)",
                   cursor: "pointer",
                 }}
                 onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
@@ -826,7 +826,7 @@ function NgoDashboardInner() {
                             border: "none",
                             cursor: payingId ? "not-allowed" : "pointer",
                             backgroundColor: "var(--accent)",
-                            color: "#000",
+                            color: "var(--accent-fg)",
                           }}
                         >
                           {payingId === tx.rawReceipt.id ? "Paying…" : "Pay"}
@@ -858,10 +858,10 @@ function NgoDashboardInner() {
             )}
 
             {payError && (
-              <p style={{ marginTop: 8, fontSize: "var(--fs-xs)", color: "#f87171" }}>{payError}</p>
+              <p style={{ marginTop: 8, fontSize: "var(--fs-xs)", color: "var(--error)" }}>{payError}</p>
             )}
             {paySuccess && (
-              <p style={{ marginTop: 8, fontSize: "var(--fs-xs)", color: "#4ade80" }}>{paySuccess}</p>
+              <p style={{ marginTop: 8, fontSize: "var(--fs-xs)", color: "var(--success)" }}>{paySuccess}</p>
             )}
 
             <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
@@ -1042,7 +1042,7 @@ function NgoDashboardInner() {
 
 export function NgoDashboardClient() {
   return (
-    <Web3Provider>
+    <Web3Provider theme={darkTheme()}>
       <NgoDashboardInner />
     </Web3Provider>
   );
