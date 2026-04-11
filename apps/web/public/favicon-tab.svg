@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="7" fill="#07111F"/>
+
+  <!-- Hex outline -->
+  <polygon points="16,5.5 24.8,10.5 24.8,21.5 16,26.5 7.2,21.5 7.2,10.5"
+           fill="none" stroke="rgba(100,170,230,0.28)" stroke-width="1"/>
+
+  <!-- Globe -->
+  <circle cx="16" cy="16" r="4.8" fill="rgba(12,36,72,0.85)" stroke="rgba(100,170,230,0.4)" stroke-width="0.8"/>
+  <ellipse cx="16" cy="16" rx="4.8" ry="2" fill="none" stroke="rgba(100,170,230,0.3)" stroke-width="0.6"/>
+  <line x1="16" y1="11.2" x2="16" y2="20.8" stroke="rgba(100,170,230,0.3)" stroke-width="0.6"/>
+
+  <!-- Amber nodes: top, bottom-right, bottom-left -->
+  <circle cx="16"   cy="5.5"  r="3" fill="#F5A623"/>
+  <circle cx="24.8" cy="21.5" r="3" fill="#F5A623"/>
+  <circle cx="7.2"  cy="21.5" r="3" fill="#F5A623"/>
+
+  <!-- Cyan nodes: top-right, bottom, top-left -->
+  <circle cx="24.8" cy="10.5" r="3" fill="#00C6FF"/>
+  <circle cx="16"   cy="26.5" r="3" fill="#00C6FF"/>
+  <circle cx="7.2"  cy="10.5" r="3" fill="#00C6FF"/>
+</svg>

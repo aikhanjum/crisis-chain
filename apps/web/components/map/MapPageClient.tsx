@@ -45,11 +45,11 @@ function MapPageInner() {
           </Link>
           <span className="text-[11px] text-stone-500 uppercase tracking-widest">Global Crisis Monitor</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center gap-1.5 rounded-md border border-stone-700 bg-stone-900/60 px-3 py-1.5 text-[11px] text-stone-300 hover:bg-stone-800 hover:text-stone-100 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full border-[3px] border-black/75 bg-zinc-700 px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.13)] transition-all duration-150 hover:bg-zinc-600 active:translate-y-px disabled:opacity-35 disabled:cursor-not-allowed"
             title="Pull latest crisis data from ACLED + HDX"
           >
             <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
@@ -57,7 +57,7 @@ function MapPageInner() {
           </button>
           <Link
             href="/ngo/dashboard"
-            className="text-xs text-stone-400 hover:text-stone-100 transition-colors"
+            className="rounded-full border-[3px] border-black/75 bg-zinc-700 px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.13)] transition-all duration-150 hover:bg-zinc-600 active:translate-y-px"
           >
             NGO Portal
           </Link>
@@ -69,26 +69,26 @@ function MapPageInner() {
                   {!connected ? (
                     <button
                       onClick={openConnectModal}
-                      className="rounded-md border border-stone-700 bg-stone-900/60 px-3 py-1.5 text-[11px] text-stone-300 hover:bg-stone-800 hover:text-stone-100 transition-colors"
+                      className="rounded-full border-[3px] border-black/75 bg-zinc-600 px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-all duration-150 hover:bg-zinc-500 active:translate-y-px"
                     >
                       Connect Wallet
                     </button>
                   ) : chain.unsupported ? (
                     <button
                       onClick={openChainModal}
-                      className="rounded-md border border-red-800 bg-red-950/60 px-3 py-1.5 text-[11px] text-red-400 hover:bg-red-900/60 hover:text-red-300 transition-colors"
+                      className="rounded-full border-[3px] border-black/75 bg-red-900 px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-150 hover:bg-red-800 active:translate-y-px"
                     >
-                      Wrong network
+                      Wrong Network
                     </button>
                   ) : (
                     <button
                       onClick={openAccountModal}
-                      className="flex items-center gap-2 rounded-md border border-stone-700 bg-stone-900/60 px-3 py-1.5 text-[11px] text-stone-300 hover:bg-stone-800 hover:text-stone-100 transition-colors"
+                      className="flex items-center gap-2 rounded-full border-[3px] border-black/75 bg-zinc-600 px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-all duration-150 hover:bg-zinc-500 active:translate-y-px"
                     >
                       {chain.hasIcon && chain.iconUrl && (
                         <img src={chain.iconUrl} alt={chain.name} className="h-3 w-3 rounded-full" />
                       )}
-                      <span className="font-mono">{account.displayName}</span>
+                      <span>{account.displayName}</span>
                     </button>
                   )}
                 </div>
@@ -127,11 +127,15 @@ function MapPageInner() {
 
       {/* Region count badge */}
       {regions && regions.length > 0 && (
-        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-lg border border-stone-800 bg-stone-900/80 px-3 py-2 backdrop-blur-sm">
-          <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-[11px] text-stone-400">
-            <span className="font-semibold text-stone-100">{regions.length}</span> active crisis regions
-          </span>
+        <div className="absolute bottom-6 right-6 z-10 flex items-center gap-4 rounded-2xl border border-white/[0.07] bg-zinc-900/60 px-5 py-4 backdrop-blur-xl shadow-[0_4px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-3xl font-extralight tabular-nums leading-none tracking-tight text-white/90">{regions.length}</span>
+            <span className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">active crisis regions</span>
+          </div>
+          <div className="relative h-2.5 w-2.5 flex-shrink-0">
+            <span className="absolute inset-0 animate-ping rounded-full bg-amber-400/60" />
+            <span className="relative flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+          </div>
         </div>
       )}
 

@@ -5,11 +5,12 @@ import "./globals.css";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CrisisChain — Transparent Humanitarian Aid",
+  title: "CrisisChain",
   description: "Donate crypto to verified crisis regions. Every dollar is traceable on-chain.",
   icons: {
-    icon: "/favicon.svg",
+    icon: "/logo-hex-network.jpg",
     apple: "/logo-hex-network.jpg",
+    shortcut: "/logo-hex-network.jpg",
   },
 };
 
