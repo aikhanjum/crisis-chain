@@ -6,7 +6,6 @@ import type { CrisisRegion } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatUsdc, usePoolStats } from "@/hooks/usePoolData";
-import { poolIdFromRegionId } from "@/lib/wallet-utils";
 
 interface CrisisDrawerProps {
   region: CrisisRegion | null;
@@ -14,8 +13,7 @@ interface CrisisDrawerProps {
 }
 
 export function CrisisDrawer({ region, onClose }: CrisisDrawerProps) {
-  const numericPoolId = region ? poolIdFromRegionId(region.id) : "";
-  const { data: pool } = usePoolStats(numericPoolId);
+  const { data: pool } = usePoolStats(region?.id ?? "");
 
   if (!region) return null;
 
