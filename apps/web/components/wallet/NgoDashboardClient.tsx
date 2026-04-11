@@ -1,6 +1,6 @@
 "use client";
 
-import { ConnectButton, darkTheme } from "@rainbow-me/rainbowkit";
+import { darkTheme } from "@rainbow-me/rainbowkit";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
@@ -17,6 +17,7 @@ import { poolIdFromRegionId } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
+import { NgoWalletButton } from "@/components/ngo/NgoWalletButton";
 
 type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
 
@@ -323,29 +324,7 @@ function NgoDashboardInner() {
 
   const headerRight = (
     <>
-      {!isConfigured && (
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
-      )}
-      {isWrongNetwork && (
-        <button
-          type="button"
-          className="ngo-cta"
-          style={{
-            padding: "6px 12px",
-            borderRadius: 5,
-            backgroundColor: "var(--pending-bg)",
-            color: "var(--pending)",
-            fontSize: "var(--fs-xs)",
-            fontWeight: 600,
-            border: "1px solid var(--pending-border)",
-            cursor: "pointer",
-          }}
-          onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
-        >
-          Switch network
-        </button>
-      )}
-      <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+      <NgoWalletButton />
       {balanceLabel ? (
         <span
           style={{

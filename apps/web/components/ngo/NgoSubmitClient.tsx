@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
@@ -11,6 +10,7 @@ import { API_GATEWAY_URL } from "@/lib/constants";
 import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
+import { NgoWalletButton } from "@/components/ngo/NgoWalletButton";
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "9px 12px", borderRadius: 5,
@@ -104,7 +104,7 @@ function SubmitInner() {
 
   const headerRight = (
     <>
-      <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+      <NgoWalletButton />
       {!isAuthenticated && (
         <button
           type="button"
