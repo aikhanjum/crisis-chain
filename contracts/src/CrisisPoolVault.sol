@@ -10,37 +10,23 @@ contract CrisisPoolVault is AccessControl, Pausable {
     using SafeERC20 for IERC20;
 
     bytes32 public constant PAYOUT_ROLE = keccak256("PAYOUT_ROLE");
-    bytes32 public constant NGO_ROLE = keccak256("NGO_ROLE");
     IERC20 public immutable token;
 
-    // ── Global distribution defaults ─────────────────────────────────────
+    // ── Distribution rules ───────────────────────────────────────────────
+    /// @notice Minimum seconds between payouts to the same recipient per pool.
+    ///         DEFAULT_ADMIN_ROLE callers bypass this check for emergencies.
     uint256 public cooldownPeriod = 48 hours;
+
+    /// @notice Basis points of pool balance that must remain after any payout.
+    ///         1000 bps = 10%. Prevents a pool from being fully drained.
+    ///         DEFAULT_ADMIN_ROLE callers bypass this check for emergencies.
     uint256 public minReserveBps = 1000;
 
-    // ── Per-pool configuration ───────────────────────────────────────────
-    struct PoolConfig {
-        uint256 maxPayoutPerRequest; // 0 = no per-request cap
-        uint256 cooldownOverride;    // 0 = use global cooldownPeriod
-        uint256 reserveBpsOverride;  // 0 = use global minReserveBps
-        bool configured;
-    }
-
-    mapping(uint256 poolId => PoolConfig) public poolConfigs;
-
-    // ── On-chain reimbursement requests ──────────────────────────────────
-    struct ReimbursementRequest {
-        uint256 poolId;
-        address ngo;
-        uint256 amount;
-        bytes32 receiptRef; // IPFS CID or off-chain reference
-        bool executed;
-    }
-
-    uint256 public nextRequestId;
-    mapping(uint256 requestId => ReimbursementRequest) public reimbursementRequests;
-
-    // ── Core state ───────────────────────────────────────────────────────
+    // ── State ────────────────────────────────────────────────────────────
     mapping(uint256 poolId => uint256 balance) public poolBalances;
+
+    /// @notice Last payout timestamp per recipient per pool.
+    ///         Used to enforce the per-NGO cooldown window.
     mapping(uint256 poolId => mapping(address recipient => uint256 timestamp)) public lastPayoutAt;
 
     // ── Events ───────────────────────────────────────────────────────────
@@ -61,38 +47,18 @@ contract CrisisPoolVault is AccessControl, Pausable {
     event CooldownPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
     event MinReserveBpsUpdated(uint256 oldBps, uint256 newBps);
 
-    event PoolConfigured(
-        uint256 indexed poolId,
-        uint256 maxPayoutPerRequest,
-        uint256 cooldownOverride,
-        uint256 reserveBpsOverride
-    );
-
-    event ReimbursementRequested(
-        uint256 indexed requestId,
-        uint256 indexed poolId,
-        address indexed ngo,
-        uint256 amount,
-        bytes32 receiptRef
-    );
-
-    event ReimbursementApproved(
-        uint256 indexed requestId,
-        uint256 indexed poolId,
-        address indexed ngo,
-        uint256 amount
-    );
-
     // ── Errors ───────────────────────────────────────────────────────────
     error InvalidAddress();
     error InvalidAmount();
     error InsufficientPoolBalance(uint256 available, uint256 requested);
+    /// @param recipient The NGO address still in cooldown.
+    /// @param availableAt Unix timestamp when the next payout is allowed.
     error CooldownActive(address recipient, uint256 availableAt);
+    /// @param poolBalance Current pool balance.
+    /// @param requested   Amount requested for payout.
+    /// @param minReserve  Minimum balance that must remain (poolBalance * minReserveBps / 10000).
     error ReserveTooLow(uint256 poolBalance, uint256 requested, uint256 minReserve);
     error InvalidBps();
-    error PayoutExceedsPoolMax(uint256 amount, uint256 max);
-    error RequestAlreadyExecuted(uint256 requestId);
-    error RequestNotFound(uint256 requestId);
 
     constructor(address admin, address tokenAddress) {
         if (admin == address(0) || tokenAddress == address(0)) {
@@ -115,7 +81,7 @@ contract CrisisPoolVault is AccessControl, Pausable {
         emit Donation(poolId, msg.sender, amount, memo);
     }
 
-    // ── Direct payout (operator / admin) ─────────────────────────────────
+    // ── NGO side ─────────────────────────────────────────────────────────
 
     function payout(
         uint256 poolId,
@@ -123,68 +89,48 @@ contract CrisisPoolVault is AccessControl, Pausable {
         uint256 amount,
         bytes32 payoutRef
     ) external whenNotPaused onlyRole(PAYOUT_ROLE) {
-        _executePayout(poolId, recipient, amount, payoutRef, msg.sender);
-    }
-
-    // ── NGO reimbursement flow ───────────────────────────────────────────
-
-    /// @notice NGO submits a reimbursement request on-chain. Does NOT move funds.
-    function requestReimbursement(
-        uint256 poolId,
-        uint256 amount,
-        bytes32 receiptRef
-    ) external whenNotPaused onlyRole(NGO_ROLE) returns (uint256 requestId) {
+        if (recipient == address(0)) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
 
-        requestId = nextRequestId++;
-        reimbursementRequests[requestId] = ReimbursementRequest({
-            poolId: poolId,
-            ngo: msg.sender,
-            amount: amount,
-            receiptRef: receiptRef,
-            executed: false
-        });
+        uint256 currentBalance = poolBalances[poolId];
+        if (amount > currentBalance) {
+            revert InsufficientPoolBalance(currentBalance, amount);
+        }
 
-        emit ReimbursementRequested(requestId, poolId, msg.sender, amount, receiptRef);
-    }
+        // Rule 2: 48-hour cooldown per recipient per pool.
+        // Admin bypasses so emergency payouts are never blocked.
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            uint256 availableAt = lastPayoutAt[poolId][recipient] + cooldownPeriod;
+            if (block.timestamp < availableAt) {
+                revert CooldownActive(recipient, availableAt);
+            }
+        }
 
-    /// @notice Operator/admin approves a pending request, executing the payout.
-    function approveReimbursement(uint256 requestId) external whenNotPaused onlyRole(PAYOUT_ROLE) {
-        ReimbursementRequest storage req = reimbursementRequests[requestId];
-        if (req.ngo == address(0)) revert RequestNotFound(requestId);
-        if (req.executed) revert RequestAlreadyExecuted(requestId);
+        // Rule 3: minimum reserve — pool must retain minReserveBps after payout.
+        // Admin bypasses for the same reason.
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            uint256 minReserve = (currentBalance * minReserveBps) / 10_000;
+            if (currentBalance - amount < minReserve) {
+                revert ReserveTooLow(currentBalance, amount, minReserve);
+            }
+        }
 
-        req.executed = true;
-        _executePayout(req.poolId, req.ngo, req.amount, req.receiptRef, msg.sender);
+        lastPayoutAt[poolId][recipient] = block.timestamp;
+        poolBalances[poolId] = currentBalance - amount;
+        token.safeTransfer(recipient, amount);
 
-        emit ReimbursementApproved(requestId, req.poolId, req.ngo, req.amount);
+        emit Payout(poolId, recipient, amount, payoutRef);
     }
 
     // ── Admin controls ───────────────────────────────────────────────────
 
-    function configurePool(
-        uint256 poolId,
-        uint256 maxPayoutPerRequest,
-        uint256 cooldownOverride,
-        uint256 reserveBpsOverride
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (reserveBpsOverride > 10_000) revert InvalidBps();
-
-        poolConfigs[poolId] = PoolConfig({
-            maxPayoutPerRequest: maxPayoutPerRequest,
-            cooldownOverride: cooldownOverride,
-            reserveBpsOverride: reserveBpsOverride,
-            configured: true
-        });
-
-        emit PoolConfigured(poolId, maxPayoutPerRequest, cooldownOverride, reserveBpsOverride);
-    }
-
+    /// @notice Update the cooldown period between payouts to the same recipient.
     function setCooldownPeriod(uint256 newPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
         emit CooldownPeriodUpdated(cooldownPeriod, newPeriod);
         cooldownPeriod = newPeriod;
     }
 
+    /// @notice Update the minimum reserve ratio. Must be <= 10000 bps (100%).
     function setMinReserveBps(uint256 newBps) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newBps > 10_000) revert InvalidBps();
         emit MinReserveBpsUpdated(minReserveBps, newBps);
@@ -197,65 +143,5 @@ contract CrisisPoolVault is AccessControl, Pausable {
 
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
-    }
-
-    // ── Internal payout logic ────────────────────────────────────────────
-
-    function _executePayout(
-        uint256 poolId,
-        address recipient,
-        uint256 amount,
-        bytes32 payoutRef,
-        address caller
-    ) internal {
-        if (recipient == address(0)) revert InvalidAddress();
-        if (amount == 0) revert InvalidAmount();
-
-        uint256 currentBalance = poolBalances[poolId];
-        if (amount > currentBalance) {
-            revert InsufficientPoolBalance(currentBalance, amount);
-        }
-
-        PoolConfig storage cfg = poolConfigs[poolId];
-        bool isAdmin = hasRole(DEFAULT_ADMIN_ROLE, caller);
-
-        // Per-pool max payout cap (admin bypasses)
-        if (!isAdmin && cfg.configured && cfg.maxPayoutPerRequest > 0) {
-            if (amount > cfg.maxPayoutPerRequest) {
-                revert PayoutExceedsPoolMax(amount, cfg.maxPayoutPerRequest);
-            }
-        }
-
-        // Cooldown: per-pool override or global (admin bypasses).
-        // Skip check when recipient has never received a payout (lastPayoutAt == 0).
-        if (!isAdmin) {
-            uint256 lastPayout = lastPayoutAt[poolId][recipient];
-            if (lastPayout > 0) {
-                uint256 cd = (cfg.configured && cfg.cooldownOverride > 0)
-                    ? cfg.cooldownOverride
-                    : cooldownPeriod;
-                uint256 availableAt = lastPayout + cd;
-                if (block.timestamp < availableAt) {
-                    revert CooldownActive(recipient, availableAt);
-                }
-            }
-        }
-
-        // Min reserve: per-pool override or global (admin bypasses)
-        if (!isAdmin) {
-            uint256 bps = (cfg.configured && cfg.reserveBpsOverride > 0)
-                ? cfg.reserveBpsOverride
-                : minReserveBps;
-            uint256 minReserve = (currentBalance * bps) / 10_000;
-            if (currentBalance - amount < minReserve) {
-                revert ReserveTooLow(currentBalance, amount, minReserve);
-            }
-        }
-
-        lastPayoutAt[poolId][recipient] = block.timestamp;
-        poolBalances[poolId] = currentBalance - amount;
-        token.safeTransfer(recipient, amount);
-
-        emit Payout(poolId, recipient, amount, payoutRef);
     }
 }

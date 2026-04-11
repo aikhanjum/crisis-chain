@@ -1,7 +1,7 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useMemo, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { parseUnits } from "viem";
 import {
   useAccount,
@@ -47,6 +47,8 @@ function DonorWalletPanelInner({
   const [poolId, setPoolId] = useState(regionId ? poolIdFromRegionId(regionId) : "88");
   const [amount, setAmount] = useState("5");
   const [memo, setMemo] = useState("donation");
+  const [recipient, setRecipient] = useState("");
+  const [payoutRef, setPayoutRef] = useState("payout");
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,10 +65,15 @@ function DonorWalletPanelInner({
   }, [amount]);
 
   useEffect(() => {
+    if (!recipient && address) setRecipient(address);
+  }, [address, recipient]);
+
+  useEffect(() => {
     if (regionId) {
       const mapped = poolIdFromRegionId(regionId);
       setPoolId(mapped);
       setMemo(`donation-${mapped}`);
+      setPayoutRef(`payout-${mapped}`);
     }
   }, [regionId]);
 
@@ -127,10 +134,33 @@ function DonorWalletPanelInner({
         functionName: "donate",
         args: [BigInt(poolId), parsedAmount, toBytes32(memo)],
       });
-      await new Promise((r) => setTimeout(r, 4000));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Donate failed.");
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function onPayout() {
+    setError(null);
+    setIsWorking(true);
+    try {
+      if (!VAULT_ADDRESS) throw new Error("Vault address is missing.");
+      if (!recipient.startsWith("0x") || recipient.length !== 42) {
+        throw new Error("Enter a valid recipient address.");
+      }
+      if (parsedAmount <= 0n) throw new Error("Enter a valid amount.");
+      await ensureNetwork();
+      await sendTx("payout", {
+        address: VAULT_ADDRESS,
+        abi: vaultAbi,
+        functionName: "payout",
+        args: [BigInt(poolId), recipient as `0x${string}`, parsedAmount, toBytes32(payoutRef)],
+      });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Payout failed.");
     } finally {
       setIsWorking(false);
     }
@@ -178,6 +208,8 @@ function DonorWalletPanelInner({
               poolId={poolId}
               amount={amount}
               memo={memo}
+              recipient={recipient}
+              payoutRef={payoutRef}
               error={error}
               isConnected={isConnected}
               isConfigured={isConfigured}
@@ -186,8 +218,11 @@ function DonorWalletPanelInner({
               onPoolIdChange={setPoolId}
               onAmountChange={setAmount}
               onMemoChange={setMemo}
+              onRecipientChange={setRecipient}
+              onPayoutRefChange={setPayoutRef}
               onApprove={onApprove}
               onDonate={onDonate}
+              onPayout={onPayout}
             />
           </div>
 

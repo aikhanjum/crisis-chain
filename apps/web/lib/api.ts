@@ -179,28 +179,3 @@ export async function submitReceipt(formData: FormData, token: string) {
   if (!res.ok) throw new Error("Failed to submit receipt");
   return res.json();
 }
-
-export async function approveReceipt(receiptId: string, token: string) {
-  const res = await fetch(`${API_GATEWAY_URL}/ngo/receipt/${receiptId}/approve`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? `Approve failed (${res.status})`);
-  }
-  return res.json();
-}
-
-export async function requestReimbursement(receiptId: string, token: string) {
-  const res = await fetch(`${API_GATEWAY_URL}/ngo/reimburse`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ receiptId }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? `Reimbursement failed (${res.status})`);
-  }
-  return res.json() as Promise<{ status: string; txHash: string; receiptId: string }>;
-}
