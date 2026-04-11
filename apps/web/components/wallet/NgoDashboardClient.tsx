@@ -4,7 +4,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
@@ -14,7 +14,7 @@ import { API_GATEWAY_URL, CHAIN_ID, EXPLORER_BASE_URL, USDC_ADDRESS, USDC_DECIMA
 import { humanityTestnet } from "@/lib/humanity";
 import { erc20Abi, vaultAbi, toBytes32 } from "@/lib/wallet-contracts";
 import { getNgoQueue, getPoolLedger, markReceiptPaid, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
-import { poolIdFromRegionId, shortenAddress } from "@/lib/wallet-utils";
+import { poolIdFromRegionId } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
 const NAV = [
@@ -322,7 +322,6 @@ function NgoDashboardInner() {
     }
   }
 
-  const walletLabel = isConnected && address ? shortenAddress(address) : "Not connected";
   const balanceLabel =
     USDC_ADDRESS && isConnected && address
       ? `${Number(formatUnits(usdcBalance, USDC_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
@@ -356,6 +355,28 @@ function NgoDashboardInner() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <Link
+              href="/map"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: "var(--fs-ui)",
+                fontWeight: 600,
+                color: "var(--text-lo)",
+                textDecoration: "none",
+                padding: "5px 10px",
+                borderRadius: 5,
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--bg)",
+              }}
+            >
+              <ArrowLeft style={{ width: 13, height: 13 }} aria-hidden />
+              Map
+            </Link>
+
+            <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
+
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12 }}>
               <span
                 style={{
@@ -410,6 +431,18 @@ function NgoDashboardInner() {
               </button>
             )}
             <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+            {balanceLabel ? (
+              <span
+                style={{
+                  fontSize: "var(--fs-xs)",
+                  color: "var(--text-vlo)",
+                  fontFamily: "var(--font-mono)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {balanceLabel}
+              </span>
+            ) : null}
             {!isAuthenticated ? (
               <>
                 {isConnected && (
@@ -433,38 +466,6 @@ function NgoDashboardInner() {
                 </button>
               </>
             ) : null}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
-                gap: 2,
-                padding: "5px 11px",
-                borderRadius: 5,
-                border: "1px solid var(--border)",
-                backgroundColor: "var(--bg)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--fs-sm)",
-                color: "var(--text-mid)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    backgroundColor: isConnected ? "var(--fulfilled)" : "var(--text-vlo)",
-                    flexShrink: 0,
-                  }}
-                />
-                {walletLabel}
-              </div>
-              {balanceLabel ? (
-                <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>{balanceLabel}</span>
-              ) : null}
-            </div>
-
             {isAuthenticated && (
               <button
                 type="button"
