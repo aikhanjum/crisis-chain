@@ -21,7 +21,7 @@
     "react-leaflet": "^5.0.0",
     "tailwind-merge": "^3.5.0",
     "viem": "^2.47.12",
-    "wagmi": "^3.6.1"
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
