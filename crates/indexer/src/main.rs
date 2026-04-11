@@ -234,7 +234,7 @@ async fn persist_donation(
     sqlx::query(
         "INSERT INTO donations (
             tx_hash, log_index, block_number, pool_id, donor, amount_raw, memo, token, vault_address
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ) VALUES ($1,$2,$3,$4::numeric,$5,$6::numeric,$7,$8,$9)
         ON CONFLICT (tx_hash, log_index) DO NOTHING",
     )
     .bind(tx_hash)
@@ -273,7 +273,7 @@ async fn persist_payout(
     sqlx::query(
         "INSERT INTO payouts (
             tx_hash, log_index, block_number, pool_id, recipient, amount_raw, payout_ref, token, vault_address
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ) VALUES ($1,$2,$3,$4::numeric,$5,$6::numeric,$7,$8,$9)
         ON CONFLICT (tx_hash, log_index) DO NOTHING",
     )
     .bind(tx_hash)
