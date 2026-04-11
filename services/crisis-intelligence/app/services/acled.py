@@ -1,19 +1,32 @@
 """
 ACLED (Armed Conflict Location & Event Data) API client.
-Docs: https://apidocs.acleddata.com/
+Docs: https://acleddata.com/api-documentation
 
-Fetches conflict events for the last N days, caches them in `acled_events`,
-then returns per-country severity scores and centroid coordinates.
+OAuth: POST /oauth/token (grant_type=password or refresh_token, client_id=acled),
+then GET /api/acled/read with Authorization: Bearer <access_token>.
+
+Tokens are cached in process memory for the server session and refreshed before
+expiry (with skew) or after a 401 using refresh_token when available.
 """
 
+from __future__ import annotations
+
+import asyncio
 import os
-import math
-import httpx
-from datetime import datetime, date, timedelta
+from dataclasses import dataclass
+from datetime import datetime, date, timedelta, timezone
 from typing import Any
+
+import httpx
+
 from app import db
 
-ACLED_BASE = "https://api.acleddata.com/acled/read"
+ACLED_ORIGIN = "https://acleddata.com"
+ACLED_OAUTH_PATH = "/oauth/token"
+ACLED_READ_PATH = "/api/acled/read"
+
+# Renew this many seconds before access_token expires (default ACLED: 86400)
+TOKEN_EXPIRY_SKEW_SEC = 120
 
 # Conflict event types ordered by severity weight
 EVENT_WEIGHTS: dict[str, float] = {
@@ -26,27 +39,149 @@ EVENT_WEIGHTS: dict[str, float] = {
 }
 
 
+@dataclass
+class _OAuthSession:
+    access_token: str | None = None
+    refresh_token: str | None = None
+    expires_at_utc: datetime | None = None
+
+    def access_valid(self) -> bool:
+        if not self.access_token or not self.expires_at_utc:
+            return False
+        return datetime.now(timezone.utc) < self.expires_at_utc
+
+    def clear_access(self) -> None:
+        self.access_token = None
+        self.expires_at_utc = None
+
+    def set_from_oauth_response(self, body: dict[str, Any]) -> None:
+        self.access_token = body["access_token"]
+        if "refresh_token" in body and body["refresh_token"]:
+            self.refresh_token = body["refresh_token"]
+        expires_in = int(body.get("expires_in", 86400))
+        safe = max(60, expires_in - TOKEN_EXPIRY_SKEW_SEC)
+        self.expires_at_utc = datetime.now(timezone.utc) + timedelta(seconds=safe)
+
+
+_oauth_lock = asyncio.Lock()
+_session = _OAuthSession()
+
+
+def _parse_read_body(body: Any) -> list[dict[str, Any]]:
+    """Normalize ACLED read JSON (may include top-level status + data)."""
+    if not isinstance(body, dict):
+        return []
+    st = body.get("status")
+    if st is not None and st != 200:
+        return []
+    data = body.get("data")
+    if isinstance(data, list):
+        return data
+    return []
+
+
+async def _oauth_token_request(client: httpx.AsyncClient, data: dict[str, str]) -> dict[str, Any]:
+    r = await client.post(
+        ACLED_OAUTH_PATH,
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+async def _ensure_oauth_tokens(client: httpx.AsyncClient, *, after_401: bool) -> str:
+    """
+    Return a valid Bearer access token. Uses in-memory cache, refresh_token,
+    or password grant. Optional env ACLED_ACCESS_TOKEN bypasses OAuth entirely.
+    """
+    static = os.environ.get("ACLED_ACCESS_TOKEN", "").strip()
+    if static:
+        return static
+
+    username = os.environ.get("ACLED_EMAIL", "").strip()
+    password = os.environ.get("ACLED_PASSWORD", "")
+    if not username or not password:
+        raise ValueError(
+            "Set ACLED_EMAIL and ACLED_PASSWORD for OAuth, or ACLED_ACCESS_TOKEN for a static Bearer token."
+        )
+
+    async with _oauth_lock:
+        if not after_401 and _session.access_valid():
+            return _session.access_token  # type: ignore[return-value]
+
+        # After 401: drop cached access so we re-auth
+        if after_401:
+            _session.clear_access()
+
+        if _session.refresh_token and (after_401 or not _session.access_valid()):
+            try:
+                body = await _oauth_token_request(
+                    client,
+                    {
+                        "refresh_token": _session.refresh_token,
+                        "grant_type": "refresh_token",
+                        "client_id": "acled",
+                    },
+                )
+                _session.set_from_oauth_response(body)
+                return _session.access_token  # type: ignore[return-value]
+            except httpx.HTTPStatusError:
+                _session.refresh_token = None
+                _session.clear_access()
+
+        body = await _oauth_token_request(
+            client,
+            {
+                "username": username,
+                "password": password,
+                "grant_type": "password",
+                "client_id": "acled",
+            },
+        )
+        _session.set_from_oauth_response(body)
+        return _session.access_token  # type: ignore[return-value]
+
+
 async def fetch_and_cache(days_back: int = 30) -> list[dict[str, Any]]:
     """
     Pull recent events from ACLED and upsert into acled_events cache table.
     Returns raw rows.
     """
     since = (date.today() - timedelta(days=days_back)).isoformat()
-    params = {
-        "email": os.environ["ACLED_EMAIL"],
-        "key": os.environ["ACLED_API_KEY"],
+    params: dict[str, str | int] = {
+        "_format": "json",
         "limit": 5000,
         "event_date": since,
         "event_date_where": "BETWEEN",
         "event_date2": date.today().isoformat(),
         "fields": "event_id_cnty|event_date|event_type|country|iso3|latitude|longitude|fatalities|notes",
     }
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.get(ACLED_BASE, params=params)
-        response.raise_for_status()
-    rows: list[dict[str, Any]] = response.json().get("data", [])
 
-    # Upsert into cache
+    async with httpx.AsyncClient(
+        base_url=ACLED_ORIGIN,
+        timeout=60.0,
+        follow_redirects=True,
+        headers={"Accept": "application/json"},
+    ) as client:
+        token = await _ensure_oauth_tokens(client, after_401=False)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(ACLED_READ_PATH, params=params, headers=headers)
+
+        if response.status_code == 401 and not os.environ.get("ACLED_ACCESS_TOKEN", "").strip():
+            token = await _ensure_oauth_tokens(client, after_401=True)
+            headers = {"Authorization": f"Bearer {token}"}
+            response = await client.get(ACLED_READ_PATH, params=params, headers=headers)
+
+        response.raise_for_status()
+        body = response.json()
+        if isinstance(body, dict) and "status" in body and body["status"] != 200:
+            raise RuntimeError(
+                f"ACLED API error: status={body.get('status')} message={body.get('message', body)}"
+            )
+        rows = _parse_read_body(body)
+
     if rows:
         await db.executemany(
             """
@@ -105,7 +240,6 @@ async def score_by_country(days_back: int = 30) -> dict[str, dict[str, Any]]:
         since,
     )
 
-    # Group by country
     by_country: dict[str, dict[str, Any]] = {}
     for r in rows:
         country = r["country"]

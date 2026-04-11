@@ -89,6 +89,23 @@ INSERT INTO crisis_nodes (region_id, name, country, lat, lng, severity_score, se
 ON CONFLICT (region_id) DO NOTHING;
 
 -- =============================================
+-- Demo region (hackathon / local demos). NGO list comes from HDX HAPI operational presence;
+-- Timor-Leste may return few or no rows — try Haiti (HTI-PORT-2024) or Sudan for richer HAPI data.
+--   POST .../discover-ngos?limit=8 via api-gateway
+-- =============================================
+INSERT INTO crisis_nodes (region_id, name, country, lat, lng, severity_score, severity_level, summary, donate_copy, source_links) VALUES
+(
+  'DEMO-SAMPLE-2026',
+  'Demo sample — Timor-Leste',
+  'Timor-Leste',
+  -8.55, 125.58, 45.0, 'medium',
+  'Seeded for demos. HDX HAPI operational-presence coverage varies by country; if discovery returns empty, test HTI-PORT-2024 or SDN-DARFUR-2024. Requires HDX_HAPI_CONTACT_EMAIL (or HDX_HAPI_APP_IDENTIFIER).',
+  'Demo copy only. Your donation narrative would go here for a real campaign.',
+  ARRAY['https://hapi.humdata.org/docs']
+)
+ON CONFLICT (region_id) DO NOTHING;
+
+-- =============================================
 -- Approved Items List (seed)
 -- =============================================
 INSERT INTO approved_items (keyword, category, notes) VALUES

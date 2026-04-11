@@ -48,18 +48,33 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/crisis_pool
       ACLED_EMAIL: ${ACLED_EMAIL}
-      ACLED_API_KEY: ${ACLED_API_KEY}
+      ACLED_PASSWORD: ${ACLED_PASSWORD}
+      ACLED_ACCESS_TOKEN: ${ACLED_ACCESS_TOKEN:-}
       AI_SUMMARY_URL: http://ai-summary:8002
       BLOCKCHAIN_BRIDGE_URL: http://blockchain-bridge:4001
       SEVERITY_DEPLOY_THRESHOLD: ${SEVERITY_DEPLOY_THRESHOLD:-60}
+      NGO_DISCOVERY_PER_REGION_LIMIT: ${NGO_DISCOVERY_PER_REGION_LIMIT:-50}
+      HDX_HAPI_BASE: ${HDX_HAPI_BASE:-https://hapi.humdata.org}
+      HDX_HAPI_APPLICATION_NAME: ${HDX_HAPI_APPLICATION_NAME:-CrisisChain}
+      # Falls back to ACLED_EMAIL so one address can satisfy both APIs
+      HDX_HAPI_CONTACT_EMAIL: ${HDX_HAPI_CONTACT_EMAIL:-${ACLED_EMAIL}}
+      HDX_HAPI_APP_IDENTIFIER: ${HDX_HAPI_APP_IDENTIFIER:-}
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      # slim image has no curl — use stdlib
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)",
+        ]
       interval: 10s
-      timeout: 5s
+      timeout: 8s
       retries: 5
+      start_period: 45s
 
   # ── Python: AI Summary ──────────────────────────────────────────────
   ai-summary:
@@ -69,10 +84,17 @@ services:
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8002/health || exit 1"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=5)",
+        ]
       interval: 10s
-      timeout: 5s
+      timeout: 8s
       retries: 5
+      start_period: 30s
 
   # ── Python: OCR Receipt ─────────────────────────────────────────────
   ocr-receipt:
@@ -86,10 +108,17 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8003/health || exit 1"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health', timeout=5)",
+        ]
       interval: 10s
-      timeout: 5s
+      timeout: 8s
       retries: 5
+      start_period: 30s
 
   # ── Node.js: API Gateway ────────────────────────────────────────────
   api-gateway:
@@ -102,14 +131,26 @@ services:
       INDEXER_URL: http://indexer:3001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       PORT: 4000
+      # Always use Compose DNS — never http://localhost from .env here (localhost is THIS container).
+      CRISIS_INTELLIGENCE_URL: http://crisis-intelligence:8001
     depends_on:
       postgres:
         condition: service_healthy
+      crisis-intelligence:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:4000/health || exit 1"]
+      # node:slim has no curl
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
-      timeout: 5s
+      timeout: 8s
       retries: 5
+      start_period: 30s
 
   # ── Node.js: Blockchain Bridge ──────────────────────────────────────
   blockchain-bridge:

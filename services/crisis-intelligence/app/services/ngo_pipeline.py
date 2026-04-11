@@ -2,7 +2,8 @@
 NGO discovery pipeline — orchestrates all 4 steps for a given region.
 
 Steps:
-  1. Query ReliefWeb Organizations API for NGOs active in the region's country
+  1. Query HDX HAPI v2 operational presence for orgs in the region's country;
+     resolve website URLs via HDX CKAN (organization_show.org_url) when available.
   2. For each org with a homepage: scrape for email addresses
   3. If no email found: DNS MX lookup → infer info@{domain}
   4. Upsert results into discovered_ngos table
@@ -10,31 +11,46 @@ Steps:
 
 Concurrency: all orgs for a region are processed concurrently with a
 semaphore to avoid hammering external sites (max 5 parallel requests).
+
+Org fetch limit: optional per-call cap, else NGO_DISCOVERY_PER_REGION_LIMIT (default 50, max 50).
 """
 
 import asyncio
+import os
 from urllib.parse import urlparse
 
 from app.models.ngo import DiscoveredNgo, NgoDiscoveryResult
-from app.services import reliefweb, ngo_scraper
+from app.services import hapi, ngo_scraper
 from app.services.dns_lookup import resolve_mx, infer_email, is_valid_email_format
 from app import db
 
 MAX_CONCURRENT = 5  # max parallel website scrapes
+MAX_ORG_FETCH = 50  # HAPI / discovery cap
 
 
-async def discover_ngos_for_region(region_id: str, country: str) -> NgoDiscoveryResult:
+def _org_fetch_limit(explicit: int | None) -> int:
+    if explicit is not None:
+        return max(1, min(MAX_ORG_FETCH, explicit))
+    raw = int(os.environ.get("NGO_DISCOVERY_PER_REGION_LIMIT", str(MAX_ORG_FETCH)))
+    return max(1, min(MAX_ORG_FETCH, raw))
+
+
+async def discover_ngos_for_region(
+    region_id: str, country: str, org_limit: int | None = None
+) -> NgoDiscoveryResult:
     """
     Full pipeline: find → scrape → DNS → upsert for one region.
     Safe to call multiple times (upserts are idempotent).
     """
     errors: list[str] = []
 
-    # Step 1: get orgs from ReliefWeb
+    limit = _org_fetch_limit(org_limit)
+
+    # Step 1: HDX HAPI operational presence + CKAN org_url
     try:
-        orgs = await reliefweb.fetch_orgs_by_country(country, limit=50)
+        orgs = await hapi.fetch_orgs_by_country(country, limit=limit)
     except Exception as exc:
-        errors.append(f"ReliefWeb org fetch failed: {exc}")
+        errors.append(f"HDX HAPI org fetch failed: {exc}")
         orgs = []
 
     sem = asyncio.Semaphore(MAX_CONCURRENT)

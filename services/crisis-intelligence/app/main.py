@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="CrisisChain — Crisis Intelligence Service",
-    description="Scrapes ACLED, HDX, and ReliefWeb. Discovers NGOs via website + DNS.",
+    description="Scrapes ACLED, HDX HAPI, ReliefWeb (summaries). NGO discovery via HAPI operational presence + HDX CKAN + DNS.",
     version="0.2.0",
     lifespan=lifespan,
 )

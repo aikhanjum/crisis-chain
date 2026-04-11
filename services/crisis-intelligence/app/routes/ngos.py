@@ -2,7 +2,8 @@ import os
 import hmac
 import hashlib
 import time
-from typing import Optional
+from typing import Annotated, Optional
+
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from app import db
 from app.models.ngo import NgoDiscoveryResult
@@ -50,11 +51,23 @@ def _verify_invite_token(token: str) -> str | None:
 
 
 @router.post("/discover/{region_id}", response_model=NgoDiscoveryResult)
-async def discover_ngos(region_id: str):
+async def discover_ngos(
+    region_id: str,
+    limit: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            le=50,
+            description="Max ReliefWeb organizations to fetch (1–50). Omit to use NGO_DISCOVERY_PER_REGION_LIMIT.",
+        ),
+    ] = None,
+):
     """
     Run the full NGO discovery pipeline for one region synchronously.
     Returns discovered NGOs with email addresses.
     Use POST /regions/refresh to run for all regions as a background task.
+
+    For demos, use the seeded region DEMO-SAMPLE-2026 and e.g. ?limit=8 to keep scrapes small.
     """
     row = await db.fetchrow(
         "SELECT country FROM crisis_nodes WHERE region_id = $1", region_id
@@ -62,7 +75,7 @@ async def discover_ngos(region_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Region not found")
 
-    return await discover_ngos_for_region(region_id, row["country"])
+    return await discover_ngos_for_region(region_id, row["country"], org_limit=limit)
 
 
 @router.get("/{region_id}")
