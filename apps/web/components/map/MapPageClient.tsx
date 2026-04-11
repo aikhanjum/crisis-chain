@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useCallback } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import type { CrisisRegion } from "@/lib/api";
@@ -12,12 +12,14 @@ import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { Web3Provider } from "@/providers/Web3Provider";
 import { CrisisMap } from "@/components/map/CrisisMap";
 import { CrisisDrawer } from "@/components/map/CrisisDrawer";
+import { DonorWalletPanelInner } from "@/components/wallet/DonorWalletPanel";
 
 function MapPageInner() {
   const queryClient = useQueryClient();
   const { data: regions, isLoading, error } = useCrisisRegions();
   const [selected, setSelected] = useState<CrisisRegion | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [donateRegionId, setDonateRegionId] = useState<string | null>(null);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -115,7 +117,11 @@ function MapPageInner() {
           regions={regions ?? []}
           onSelectRegion={(r) => setSelected(r)}
         />
-        <CrisisDrawer region={selected} onClose={() => setSelected(null)} />
+        <CrisisDrawer
+          region={selected}
+          onClose={() => setSelected(null)}
+          onDonate={(regionId) => { setDonateRegionId(regionId); setSelected(null); }}
+        />
       </div>
 
       {/* Region count badge */}
@@ -125,6 +131,28 @@ function MapPageInner() {
           <span className="text-[11px] text-stone-400">
             <span className="font-semibold text-stone-100">{regions.length}</span> active crisis regions
           </span>
+        </div>
+      )}
+
+      {/* Donate modal overlay */}
+      {donateRegionId && (
+        <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-5xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl mx-4">
+            <button
+              onClick={() => setDonateRegionId(null)}
+              className="absolute top-4 right-4 z-10 rounded-md p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+              aria-label="Close donate panel"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <DonorWalletPanelInner
+              title="Donate to a Crisis Pool"
+              subtitle="Use your wallet to approve mUSDC, donate into the regional pool, and track transparent payout activity."
+              regionId={donateRegionId}
+              poolIdEditable={false}
+              modal
+            />
+          </div>
         </div>
       )}
     </div>

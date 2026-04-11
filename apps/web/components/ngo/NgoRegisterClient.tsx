@@ -10,6 +10,7 @@ import { Web3Provider } from "@/providers/Web3Provider";
 import { API_GATEWAY_URL } from "@/lib/constants";
 import { shortenAddress } from "@/lib/wallet-utils";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
+import { NgoWalletButton } from "@/components/ngo/NgoWalletButton";
 
 function RegisterInner() {
   const { address, isConnected } = useAccount();
@@ -72,7 +73,7 @@ function RegisterInner() {
     marginBottom: 5,
   };
 
-  const headerRight = <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />;
+  const headerRight = <NgoWalletButton />;
 
   return (
     <div>

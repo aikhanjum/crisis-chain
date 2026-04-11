@@ -11,6 +11,7 @@ type WalletStatusCardProps = {
   usdcAddress?: `0x${string}`;
   vaultAddress?: `0x${string}`;
   onSwitchNetwork: () => Promise<unknown>;
+  compact?: boolean;
 };
 
 export function WalletStatusCard({
@@ -22,14 +23,15 @@ export function WalletStatusCard({
   usdcAddress,
   vaultAddress,
   onSwitchNetwork,
+  compact,
 }: WalletStatusCardProps) {
   return (
-    <Card className="rounded-2xl border-zinc-800/90 bg-zinc-900/85 p-5">
-      <CardHeader className="mb-4">
-        <CardTitle className="text-base font-semibold">Wallet and Network Status</CardTitle>
+    <Card className={`rounded-2xl border-zinc-800/90 bg-zinc-900/85 ${compact ? "p-3" : "p-5"}`}>
+      <CardHeader className={compact ? "mb-1" : "mb-4"}>
+        <CardTitle className={compact ? "text-xs font-semibold" : "text-base font-semibold"}>Wallet & Network</CardTitle>
       </CardHeader>
 
-      <div className="grid grid-cols-1 gap-2 text-sm text-zinc-300 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 gap-1 text-zinc-300 sm:grid-cols-2 ${compact ? "text-xs" : "text-sm gap-2"}`}>
         <p>
           <span className="text-zinc-500">Wallet:</span> {isConnected ? shortenAddress(address) : "Not connected"}
         </p>

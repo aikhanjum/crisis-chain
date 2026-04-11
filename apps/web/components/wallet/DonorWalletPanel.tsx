@@ -30,13 +30,15 @@ type DonorWalletPanelProps = {
   subtitle: string;
   regionId?: string;
   poolIdEditable?: boolean;
+  modal?: boolean;
 };
 
-function DonorWalletPanelInner({
+export function DonorWalletPanelInner({
   title,
   subtitle,
   regionId,
   poolIdEditable = true,
+  modal,
 }: DonorWalletPanelProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -166,6 +168,79 @@ function DonorWalletPanelInner({
     } finally {
       setIsWorking(false);
     }
+  }
+
+  if (modal) {
+    return (
+      <div className="bg-zinc-950 text-zinc-100">
+        <div className="px-4 pt-4 pb-3">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Donor Wallet</p>
+              <h1 className="text-base font-semibold tracking-tight text-zinc-50">{title}</h1>
+              {regionId ? (
+                <p className="text-[10px] text-zinc-500">
+                  Region <span className="text-zinc-300">{regionId}</span> · Pool{" "}
+                  <span className="text-zinc-300">{poolId}</span>
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+              <Button variant="ghost" size="sm" onClick={() => refresh()}>Sync</Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-3">
+              <WalletStatusCard
+                address={address}
+                chainId={chainId}
+                isConnected={isConnected}
+                isWrongNetwork={isWrongNetwork}
+                isConfigured={isConfigured}
+                usdcAddress={USDC_ADDRESS}
+                vaultAddress={VAULT_ADDRESS}
+                onSwitchNetwork={() => switchChainAsync({ chainId: humanityTestnet.id })}
+                compact
+              />
+              <WalletTransactionCard
+                poolId={poolId}
+                amount={amount}
+                memo={memo}
+                recipient={recipient}
+                payoutRef={payoutRef}
+                error={error}
+                isConnected={isConnected}
+                isConfigured={isConfigured}
+                isWorking={isWorking}
+                poolIdEditable={poolIdEditable}
+                onPoolIdChange={setPoolId}
+                onAmountChange={setAmount}
+                onMemoChange={setMemo}
+                onRecipientChange={setRecipient}
+                onPayoutRefChange={setPayoutRef}
+                onApprove={onApprove}
+                onDonate={onDonate}
+                onPayout={onPayout}
+                compact
+              />
+            </div>
+            <div className="space-y-3">
+              <PoolAnalyticsCard
+                poolId={poolId}
+                loading={loading}
+                error={poolError}
+                data={poolStats}
+                onRefresh={refresh}
+                compact
+              />
+              <TxHistoryCard txHistory={history} compact />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -75,6 +75,7 @@
   /* ── Base ───────────────────────────────────────────────────────── */
   min-height: 100dvh;
   background-color: var(--bg);
+  overscroll-behavior: none;
   color: var(--text-hi);
   font-family: var(--font-sans, sans-serif);
   -webkit-font-smoothing: antialiased;

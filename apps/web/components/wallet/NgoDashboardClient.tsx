@@ -93,6 +93,7 @@ function NgoDashboardInner() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const [paySuccess, setPaySuccess] = useState<string | null>(null);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   const { data: allRegions = [], isLoading: regionsLoading, error: regionsError } = useCrisisRegions();
   const [operatedRegions, setOperatedRegions] = useState<string[] | null>(null);
@@ -541,7 +542,7 @@ function NgoDashboardInner() {
         {!isAuthenticated && (
           <div style={{ padding: "48px 24px", textAlign: "center", border: "1px solid var(--border-faint)", borderRadius: 10, backgroundColor: "var(--surface)" }}>
             <p style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-hi)", marginBottom: 8 }}>Sign in to access the NGO dashboard</p>
-            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Use your wallet or click "Email sign in" in the header.</p>
+            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Use your wallet or click &quot;Email sign in&quot; in the header.</p>
             <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>Demo: test@crisischain.org / demo1234</p>
           </div>
         )}
@@ -657,9 +658,26 @@ function NgoDashboardInner() {
                 <div style={{ padding: "18px 20px" }}>
                   <p style={subLabel}>Summary</p>
                   <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-mid)", lineHeight: 1.45, margin: 0 }}>
-                    {primaryRegion.summary.slice(0, 220)}
-                    {primaryRegion.summary.length > 220 ? "…" : ""}
+                    {summaryExpanded ? primaryRegion.summary : primaryRegion.summary.slice(0, 220)}
+                    {!summaryExpanded && primaryRegion.summary.length > 220 ? "…" : ""}
                   </p>
+                  {primaryRegion.summary.length > 220 && (
+                    <button
+                      onClick={() => setSummaryExpanded((v) => !v)}
+                      style={{
+                        marginTop: 6,
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        fontSize: "var(--fs-xs)",
+                        color: "var(--accent-text)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {summaryExpanded ? "Show less" : "Show more"}
+                    </button>
+                  )}
                 </div>
               </div>
 

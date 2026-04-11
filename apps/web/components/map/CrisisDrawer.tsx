@@ -10,9 +10,10 @@ import { formatUsdc, usePoolStats } from "@/hooks/usePoolData";
 interface CrisisDrawerProps {
   region: CrisisRegion | null;
   onClose: () => void;
+  onDonate?: (regionId: string) => void;
 }
 
-export function CrisisDrawer({ region, onClose }: CrisisDrawerProps) {
+export function CrisisDrawer({ region, onClose, onDonate }: CrisisDrawerProps) {
   const { data: pool } = usePoolStats(region?.id ?? "");
 
   if (!region) return null;
@@ -46,9 +47,13 @@ export function CrisisDrawer({ region, onClose }: CrisisDrawerProps) {
         )}
 
         <div className="mt-3 flex gap-2">
-          <Link href={`/donate/${region.id}`} className="flex-1">
-            <Button className="w-full" size="sm">Donate</Button>
-          </Link>
+          {onDonate ? (
+            <Button className="flex-1 w-full" size="sm" onClick={() => onDonate(region.id)}>Donate</Button>
+          ) : (
+            <Link href={`/donate/${region.id}`} className="flex-1">
+              <Button className="w-full" size="sm">Donate</Button>
+            </Link>
+          )}
           <Link href={`/pool/${region.id}/ledger`}>
             <Button variant="secondary" size="sm">Ledger</Button>
           </Link>
