@@ -115,11 +115,6 @@ function SubmitInner() {
           {showEmailForm ? "Cancel" : "Email sign in"}
         </button>
       )}
-      {isAuthenticated && (
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--fulfilled)", padding: "4px 10px", border: "1px solid var(--fulfilled-border)", borderRadius: 5, backgroundColor: "var(--fulfilled-bg)" }}>
-          Authenticated
-        </span>
-      )}
     </>
   );
 
