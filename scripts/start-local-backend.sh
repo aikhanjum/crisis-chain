@@ -35,7 +35,7 @@ if nc -z 127.0.0.1 3001 2>/dev/null; then
   echo "==> Indexer already listening on :3001 (skip)"
 else
   echo "==> Indexer (background on :3001)"
-  (cd "$ROOT" && cargo run -p indexer >/tmp/crisischain-indexer.log 2>&1) &
+  (cd "$ROOT" && source "$HOME/.cargo/env" && cargo run -p indexer >/tmp/crisischain-indexer.log 2>&1) &
   for _ in $(seq 1 40); do
     if nc -z 127.0.0.1 3001 2>/dev/null; then break; fi
     sleep 0.25
