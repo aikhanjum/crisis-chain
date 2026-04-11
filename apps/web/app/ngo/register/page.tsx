@@ -10,18 +10,47 @@
 
 export default function NgoRegisterPage() {
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      <div className="mx-auto max-w-lg px-4 py-16">
-        <h1 className="text-2xl font-bold">NGO Registration</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Apply to receive reimbursements from regional crisis pools. Your wallet address will be
-          whitelisted after manual review.
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: "56px 32px 96px" }}>
+      <div className="fu fu-1">
+        <h1
+          style={{
+            fontSize: "1.375rem",
+            fontWeight: 600,
+            color: "var(--text-hi)",
+            letterSpacing: "-0.01em",
+            lineHeight: 1.2,
+          }}
+        >
+          NGO Registration
+        </h1>
+        <p
+          style={{
+            fontSize: "1rem",
+            color: "var(--text-mid)",
+            lineHeight: 1.6,
+            marginTop: 8,
+          }}
+        >
+          Apply to receive reimbursements from regional crisis pools. Your wallet
+          address will be whitelisted after manual review.
         </p>
+      </div>
 
-        {/* TODO: connect wallet first, then show form */}
-        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-zinc-500 text-sm">
-          [ Registration form — org name, country, reg number, operated regions, wallet (auto from MetaMask) ]
-        </div>
+      {/* TODO: connect wallet first, then show form */}
+      <div
+        className="fu fu-2"
+        style={{
+          marginTop: 28,
+          border: "1px solid var(--border-faint)",
+          backgroundColor: "var(--surface)",
+          borderRadius: 10,
+          padding: 24,
+          color: "var(--text-vlo)",
+          fontSize: "var(--fs-body)",
+        }}
+      >
+        [ Registration form — org name, country, reg number, operated regions,
+        wallet (auto from MetaMask) ]
       </div>
     </div>
   );
