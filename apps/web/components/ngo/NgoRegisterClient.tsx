@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Wallet } from "lucide-react";
 
 import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
@@ -91,9 +91,58 @@ function RegisterInner() {
         </div>
 
         {!isConnected ? (
-          <div className="fu fu-2 ngo-card" style={{ padding: 28, textAlign: "center" }}>
-            <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-body)", marginBottom: 16 }}>Connect your wallet to begin registration.</p>
-            <ConnectButton />
+          <div
+            className="fu fu-2 ngo-card"
+            style={{
+              padding: "40px 28px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 20,
+            }}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                background: "var(--accent-lo)",
+                border: "1px solid var(--border-faint)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Wallet style={{ width: 22, height: 22, color: "var(--accent-text)" }} />
+            </div>
+            <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-body)", lineHeight: 1.5, textAlign: "center" }}>
+              Connect your wallet to begin registration.
+            </p>
+            <ConnectButton.Custom>
+              {({ openConnectModal }) => (
+                <button
+                  type="button"
+                  onClick={openConnectModal}
+                  className="ngo-cta"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "11px 28px",
+                    borderRadius: 7,
+                    backgroundColor: "var(--accent)",
+                    color: "var(--accent-fg)",
+                    fontSize: "var(--fs-ui)",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    boxShadow: "var(--shadow-card)",
+                  }}
+                >
+                  Connect Wallet
+                </button>
+              )}
+            </ConnectButton.Custom>
           </div>
         ) : success ? (
           <div className="fu fu-1 ngo-card" style={{ padding: 36, textAlign: "center", borderColor: "var(--fulfilled-border)", backgroundColor: "var(--fulfilled-bg)" }}>

@@ -2,9 +2,8 @@
 
 import { ConnectButton, darkTheme } from "@rainbow-me/rainbowkit";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
@@ -17,11 +16,7 @@ import { getNgoQueue, getPoolLedger, markReceiptPaid, type CrisisRegion, type Ng
 import { poolIdFromRegionId } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
-const NAV = [
-  { href: "/ngo/dashboard", label: "Dashboard" },
-  { href: "/ngo/submit", label: "Submit Receipt" },
-  { href: "/ngo/register", label: "Register" },
-] as const;
+import { NgoHeader } from "@/components/ngo/NgoHeader";
 
 type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
 
@@ -75,7 +70,6 @@ function poolKeyForRegion(r: CrisisRegion): string {
 }
 
 function NgoDashboardInner() {
-  const pathname = usePathname();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
@@ -327,185 +321,112 @@ function NgoDashboardInner() {
       ? `${Number(formatUnits(usdcBalance, USDC_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
       : null;
 
-  return (
-    <div>
-      <header
-        className="fu fu-1"
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 40,
-          backgroundColor: "var(--surface)",
-          borderBottom: "1px solid var(--border-faint)",
-        }}
-      >
-        <div
+  const headerRight = (
+    <>
+      {!isConfigured && (
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
+      )}
+      {isWrongNetwork && (
+        <button
+          type="button"
+          className="ngo-cta"
           style={{
-            maxWidth: 1160,
-            margin: "0 auto",
-            padding: "0 32px",
-            minHeight: 54,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-            paddingTop: 10,
-            paddingBottom: 10,
+            padding: "6px 12px",
+            borderRadius: 5,
+            backgroundColor: "var(--pending-bg)",
+            color: "var(--pending)",
+            fontSize: "var(--fs-xs)",
+            fontWeight: 600,
+            border: "1px solid var(--pending-border)",
+            cursor: "pointer",
+          }}
+          onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
+        >
+          Switch network
+        </button>
+      )}
+      <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+      {balanceLabel ? (
+        <span
+          style={{
+            fontSize: "var(--fs-xs)",
+            color: "var(--text-vlo)",
+            fontFamily: "var(--font-mono)",
+            whiteSpace: "nowrap",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <Link
-              href="/map"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: "var(--fs-ui)",
-                fontWeight: 600,
-                color: "var(--text-lo)",
-                textDecoration: "none",
-                padding: "5px 10px",
-                borderRadius: 5,
-                border: "1px solid var(--border)",
-                backgroundColor: "var(--bg)",
-              }}
+          {balanceLabel}
+        </span>
+      ) : null}
+      {!isAuthenticated ? (
+        <>
+          {isConnected && (
+            <button
+              type="button"
+              className="ngo-cta"
+              style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: walletAuth.loading ? "wait" : "pointer" }}
+              disabled={walletAuth.loading}
+              onClick={() => onSignIn()}
             >
-              <ArrowLeft style={{ width: 13, height: 13 }} aria-hidden />
-              Map
-            </Link>
+              {walletAuth.loading ? "Signing…" : "Sign in with wallet"}
+            </button>
+          )}
+          <button
+            type="button"
+            className="ngo-cta"
+            style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
+            onClick={() => setShowEmailForm((v) => !v)}
+          >
+            {showEmailForm ? "Cancel" : "Email sign in"}
+          </button>
+        </>
+      ) : null}
+      {isAuthenticated && (
+        <button
+          type="button"
+          className="ngo-cta"
+          style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-lo)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
+          onClick={logout}
+        >
+          Sign out
+        </button>
+      )}
+      <Link href="/ngo/submit">
+        <button
+          type="button"
+          className="ngo-cta"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "7px 15px",
+            borderRadius: 5,
+            backgroundColor: "var(--accent)",
+            color: "var(--accent-fg)",
+            fontSize: "var(--fs-ui)",
+            fontWeight: 600,
+            letterSpacing: "0.005em",
+            border: "none",
+            cursor: "pointer",
+            transition: "background-color 0.12s",
+          }}
+        >
+          <Plus style={{ width: 13, height: 13 }} />
+          Submit Receipt
+        </button>
+      </Link>
+    </>
+  );
 
-            <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
+  return (
+    <div>
+      <NgoHeader rightSlot={headerRight} />
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12 }}>
-              <span
-                style={{
-                  fontSize: "var(--fs-brand)",
-                  fontWeight: 600,
-                  color: "var(--text-hi)",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                CrisisChain
-              </span>
-              <span style={{ color: "var(--border-mid)", fontSize: "var(--fs-sm)", userSelect: "none" }}>/</span>
-              <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>NGO Portal</span>
-            </div>
-
-            <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
-
-            <nav style={{ display: "flex", gap: 2 }}>
-              {NAV.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`ngo-nav-link${pathname === href ? " ngo-nav-link-active" : ""}`}
-                >
-                  {label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {!isConfigured && (
-              <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
-            )}
-            {isWrongNetwork && (
-              <button
-                type="button"
-                className="ngo-cta"
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 5,
-                  backgroundColor: "var(--pending-bg)",
-                  color: "var(--pending)",
-                  fontSize: "var(--fs-xs)",
-                  fontWeight: 600,
-                  border: "1px solid var(--pending-border)",
-                  cursor: "pointer",
-                }}
-                onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
-              >
-                Switch network
-              </button>
-            )}
-            <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
-            {balanceLabel ? (
-              <span
-                style={{
-                  fontSize: "var(--fs-xs)",
-                  color: "var(--text-vlo)",
-                  fontFamily: "var(--font-mono)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {balanceLabel}
-              </span>
-            ) : null}
-            {!isAuthenticated ? (
-              <>
-                {isConnected && (
-                  <button
-                    type="button"
-                    className="ngo-cta"
-                    style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: walletAuth.loading ? "wait" : "pointer" }}
-                    disabled={walletAuth.loading}
-                    onClick={() => onSignIn()}
-                  >
-                    {walletAuth.loading ? "Signing…" : "Sign in with wallet"}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="ngo-cta"
-                  style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
-                  onClick={() => setShowEmailForm((v) => !v)}
-                >
-                  {showEmailForm ? "Cancel" : "Email sign in"}
-                </button>
-              </>
-            ) : null}
-            {isAuthenticated && (
-              <button
-                type="button"
-                className="ngo-cta"
-                style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-lo)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
-                onClick={logout}
-              >
-                Sign out
-              </button>
-            )}
-            <Link href="/ngo/submit">
-              <button
-                type="button"
-                className="ngo-cta"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "7px 15px",
-                  borderRadius: 5,
-                  backgroundColor: "var(--accent)",
-                  color: "var(--accent-fg)",
-                  fontSize: "var(--fs-ui)",
-                  fontWeight: 600,
-                  letterSpacing: "0.005em",
-                  border: "none",
-                  cursor: "pointer",
-                  transition: "background-color 0.12s",
-                }}
-              >
-                <Plus style={{ width: 13, height: 13 }} />
-                Submit Receipt
-              </button>
-            </Link>
-          </div>
-        </div>
-        {showEmailForm && !isAuthenticated ? (
+      {showEmailForm && !isAuthenticated ? (
+        <div style={{ position: "sticky", top: 56, zIndex: 39, backgroundColor: "var(--surface)", borderBottom: "1px solid var(--border-faint)" }}>
           <form
             onSubmit={onEmailSignIn}
-            style={{ maxWidth: 1160, margin: "0 auto", padding: "8px 32px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border-faint)" }}
+            style={{ maxWidth: 1160, margin: "0 auto", padding: "8px 32px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
           >
             <input
               type="email"
@@ -531,13 +452,13 @@ function NgoDashboardInner() {
               {emailAuth.loading ? "Signing in…" : "Sign in"}
             </button>
           </form>
-        ) : null}
-        {authError ? (
-          <p style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px", fontSize: "var(--fs-xs)", color: "var(--open)" }}>
-            {authError}
-          </p>
-        ) : null}
-      </header>
+          {authError ? (
+            <p style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px", fontSize: "var(--fs-xs)", color: "var(--open)" }}>
+              {authError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "36px 32px 96px" }}>
         {!isAuthenticated && (
