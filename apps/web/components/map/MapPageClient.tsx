@@ -38,9 +38,10 @@ function MapPageInner() {
     <div className="relative flex h-screen w-full flex-col" style={{ background: "#0c0a09" }}>
       <header className="absolute top-0 left-0 right-0 z-20 flex h-14 items-center justify-between px-5"
         style={{ background: "linear-gradient(to bottom, rgba(12,10,9,0.85) 0%, transparent 100%)" }}>
-        <div className="flex items-center gap-4">
-          <Link href="/" className="font-bold text-white text-sm tracking-wide">
-            CrisisChain
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-2">
+            <img src="/favicon.svg" alt="CrisisChain" className="h-8 w-8" />
+            <span className="font-bold text-white text-sm tracking-wide">CrisisChain</span>
           </Link>
           <span className="text-[11px] text-stone-500 uppercase tracking-widest">Global Crisis Monitor</span>
         </div>

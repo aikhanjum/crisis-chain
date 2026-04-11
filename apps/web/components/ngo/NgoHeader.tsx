@@ -67,26 +67,7 @@ export function NgoHeader({ rightSlot }: { rightSlot?: React.ReactNode }) {
             href="/ngo/dashboard"
             style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12, textDecoration: "none" }}
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 22 22"
-              fill="none"
-              aria-hidden="true"
-              style={{ flexShrink: 0 }}
-            >
-              <circle cx="11" cy="11" r="10" fill="var(--accent-lo)" stroke="var(--accent)" strokeWidth="1.5" />
-              <path
-                d="M7 11.5 C7 8.5 9 7 11 7 C13 7 15 8.5 15 11.5 C15 13.5 13.5 15 11 15 C8.5 15 7 13.5 7 11.5Z"
-                fill="var(--accent)"
-                opacity="0.25"
-              />
-              <circle cx="11" cy="11" r="2" fill="var(--accent)" />
-              <line x1="11" y1="4" x2="11" y2="6.5" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="11" y1="15.5" x2="11" y2="18" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="4" y1="11" x2="6.5" y2="11" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="15.5" y1="11" x2="18" y2="11" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+            <img src="/favicon.svg" alt="CrisisChain" style={{ width: 28, height: 28, flexShrink: 0 }} />
             <div>
               <span
                 style={{

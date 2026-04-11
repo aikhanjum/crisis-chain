@@ -7,6 +7,10 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CrisisChain — Transparent Humanitarian Aid",
   description: "Donate crypto to verified crisis regions. Every dollar is traceable on-chain.",
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/logo-hex-network.jpg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
