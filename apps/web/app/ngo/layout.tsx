@@ -18,7 +18,7 @@ const mono = Red_Hat_Mono({
 export default function NgoLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className={`ngo-root ${sans.variable} ${mono.variable}`}>
-      <style>{`html, body { background-color: oklch(17% 0.008 65); }`}</style>
+      <style>{`html, body { background-color: oklch(5% 0.020 268); }`}</style>
       {children}
     </div>
   );

@@ -2,19 +2,61 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { CheckCircle2, Loader2, Wallet } from "lucide-react";
+import { formatUnits } from "viem";
 
 import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
-import { API_GATEWAY_URL } from "@/lib/constants";
+import { API_GATEWAY_URL, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
+import { erc20Abi } from "@/lib/wallet-contracts";
 import { shortenAddress } from "@/lib/wallet-utils";
+import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
 import { NgoWalletButton } from "@/components/ngo/NgoWalletButton";
 
 function RegisterInner() {
   const { address, isConnected } = useAccount();
+  const walletAuth = useNgoAuth();
+  const emailAuth = useEmailAuth();
+  const isAuthenticated = walletAuth.isAuthenticated || emailAuth.isAuthenticated;
+  const isConfigured = Boolean(USDC_ADDRESS && VAULT_ADDRESS);
+
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const { data: usdcBalance = 0n } = useReadContract({
+    address: USDC_ADDRESS || undefined,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: Boolean(USDC_ADDRESS && address) },
+  });
+  const balanceLabel = USDC_ADDRESS && isConnected && address
+    ? `${Number(formatUnits(usdcBalance, USDC_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
+    : null;
+
+  async function onSignIn() {
+    setAuthError(null);
+    try { await walletAuth.login(); }
+    catch (e) { setAuthError(e instanceof Error ? e.message : "Sign-in failed"); }
+  }
+
+  async function onEmailSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setAuthError(null);
+    try {
+      await emailAuth.login(emailInput, passwordInput);
+      setShowEmailForm(false);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Sign-in failed");
+    }
+  }
+
+  function logout() { walletAuth.logout(); emailAuth.logout(); }
 
   const [orgName, setOrgName] = useState("");
   const [country, setCountry] = useState("");
@@ -74,13 +116,91 @@ function RegisterInner() {
     marginBottom: 5,
   };
 
-  const headerRight = <NgoWalletButton />;
-
   return (
     <div>
-      <NgoHeader rightSlot={headerRight} />
+      <NgoHeader />
 
       <div style={{ maxWidth: 500, margin: "0 auto", padding: "48px 32px 96px" }}>
+
+        {/* ── Wallet / Auth card ─────────────────────────────── */}
+        <div className="fu fu-1 ngo-card" style={{ padding: "20px 24px", marginBottom: 32, display: "flex", flexDirection: "column", gap: 14 }}>
+          <p style={{ ...labelStyle, marginBottom: 0 }}>Wallet &amp; Session</p>
+          <hr className="ngo-field-divider" />
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <NgoWalletButton />
+            {!isConfigured && (
+              <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
+            )}
+            {balanceLabel && (
+              <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", fontFamily: "var(--font-mono)" }}>{balanceLabel}</span>
+            )}
+          </div>
+
+          {isConnected && !isAuthenticated && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{ padding: "6px 14px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: walletAuth.loading ? "wait" : "pointer" }}
+                disabled={walletAuth.loading}
+                onClick={onSignIn}
+              >
+                {walletAuth.loading ? "Signing…" : "Sign in with wallet"}
+              </button>
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{ padding: "6px 14px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
+                onClick={() => setShowEmailForm((v) => !v)}
+              >
+                {showEmailForm ? "Cancel" : "Email sign in"}
+              </button>
+            </div>
+          )}
+
+          {!isConnected && !isAuthenticated && (
+            <button
+              type="button"
+              className="ngo-cta"
+              style={{ padding: "6px 14px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer", alignSelf: "flex-start" }}
+              onClick={() => setShowEmailForm((v) => !v)}
+            >
+              {showEmailForm ? "Cancel" : "Email sign in"}
+            </button>
+          )}
+
+          {showEmailForm && !isAuthenticated && (
+            <form onSubmit={onEmailSignIn} style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              <input type="email" required placeholder="Email" value={emailInput} onChange={(e) => setEmailInput(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: 5, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text-hi)", fontSize: "var(--fs-ui)", width: 190 }} />
+              <input type="password" required placeholder="Password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: 5, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text-hi)", fontSize: "var(--fs-ui)", width: 150 }} />
+              <button type="submit" disabled={emailAuth.loading}
+                style={{ padding: "6px 14px", borderRadius: 5, backgroundColor: "var(--accent)", color: "var(--accent-fg)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "none", cursor: emailAuth.loading ? "wait" : "pointer" }}>
+                {emailAuth.loading ? "Signing in…" : "Sign in"}
+              </button>
+              {authError && <p style={{ width: "100%", fontSize: "var(--fs-xs)", color: "var(--open)", margin: 0 }}>{authError}</p>}
+            </form>
+          )}
+
+          {isAuthenticated && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: "var(--fs-xs)", color: "var(--fulfilled)", padding: "3px 10px", border: "1px solid var(--fulfilled-border)", borderRadius: 5, backgroundColor: "var(--fulfilled-bg)" }}>
+                Authenticated
+              </span>
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{ padding: "6px 14px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-lo)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
+                onClick={logout}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="fu fu-1" style={{ marginBottom: 32 }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--text-hi)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
             Register your NGO

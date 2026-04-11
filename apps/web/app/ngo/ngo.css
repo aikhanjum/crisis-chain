@@ -13,68 +13,68 @@
   --fs-count: 1.5rem;     /* 24px — stat count numbers                     */
   --fs-hero:  2.25rem;    /* 36px — primary balance figure                 */
 
-  /* ── Backgrounds — dark warm neutral (hue 65, terracotta family) ─ */
-  --bg:            oklch(17%   0.008 65);
-  --surface:       oklch(21.5% 0.011 65);
-  --surface-hover: oklch(27%   0.014 65);
+  /* ── Backgrounds — deep space (hue 268, violet-navy family) ────── */
+  --bg:            oklch(5%    0.020 268);   /* void near-black            */
+  --surface:       oklch(11%   0.050 265);   /* deep space surface         */
+  --surface-hover: oklch(16%   0.065 268);   /* lit hover state            */
 
-  /* ── Borders ────────────────────────────────────────────────────── */
-  --border-faint: oklch(30%  0.012 65);
-  --border:       oklch(38%  0.014 65);
-  --border-mid:   oklch(50%  0.016 65);
+  /* ── Borders — cool navy-indigo ─────────────────────────────────── */
+  --border-faint: oklch(22%  0.040 265);
+  --border:       oklch(33%  0.050 265);
+  --border-mid:   oklch(46%  0.050 265);
 
-  /* ── Text — light on dark ───────────────────────────────────────── */
-  --text-hi:  oklch(96%  0.004 65);
-  --text-mid: oklch(78%  0.008 28);
-  --text-lo:  oklch(62%  0.008 28);
-  --text-vlo: oklch(48%  0.006 28);
+  /* ── Text — light on deep space, cool-tinted ────────────────────── */
+  --text-hi:  oklch(96%  0.006 265);
+  --text-mid: oklch(76%  0.012 260);
+  --text-lo:  oklch(58%  0.010 255);
+  --text-vlo: oklch(43%  0.008 260);
 
-  /* ── Accent: terracotta (brighter for dark canvas) ─────────────── */
-  --accent:      oklch(62%   0.13  28);
-  --accent-dark: oklch(54%   0.13  28);
-  --accent-lo:   oklch(26%   0.05  28);
-  --accent-text: oklch(72%   0.11  28);
-  --accent-fg:   oklch(98%   0.005 65);  /* text on filled terracotta button */
+  /* ── Accent: stellar gold (hot star against cold space) ─────────── */
+  --accent:      oklch(74%   0.18   65);
+  --accent-dark: oklch(66%   0.18   65);
+  --accent-lo:   oklch(16%   0.06   65);
+  --accent-text: oklch(84%   0.14   65);
+  --accent-fg:   oklch(8%    0.02  265);   /* dark text on gold button   */
 
   /* ── Pool visualization — two-segment bar ──────────────────────── */
   --pool-committed:    oklch(62% 0.10 225);   /* steel blue  — transacted/locked  */
-  --pool-committed-bg: oklch(22% 0.04 225);
+  --pool-committed-bg: oklch(16% 0.04 225);
   --pool-in:           oklch(62% 0.10 155);   /* sage green  — waiting in pool    */
-  --pool-in-bg:        oklch(22% 0.035 155);
+  --pool-in-bg:        oklch(16% 0.035 155);
 
   /* ── IPC food security severity (non-red scale) ─────────────────── */
   --ipc-5:        oklch(72% 0.12 305);   /* deep plum  — Famine    */
-  --ipc-5-bg:     oklch(22% 0.05 305);
-  --ipc-5-border: oklch(40% 0.08 305);
-  --ipc-4:        oklch(78% 0.14 55);    /* amber       — Emergency */
-  --ipc-4-bg:     oklch(24% 0.06 55);
-  --ipc-4-border: oklch(42% 0.09 55);
-  --ipc-3:        oklch(70% 0.11 100);   /* olive       — Crisis    */
-  --ipc-3-bg:     oklch(23% 0.04 100);
-  --ipc-3-border: oklch(40% 0.07 100);
+  --ipc-5-bg:     oklch(16% 0.05 305);
+  --ipc-5-border: oklch(38% 0.08 305);
+  --ipc-4:        oklch(78% 0.14 55);    /* amber      — Emergency */
+  --ipc-4-bg:     oklch(18% 0.06 55);
+  --ipc-4-border: oklch(40% 0.09 55);
+  --ipc-3:        oklch(70% 0.11 100);   /* olive      — Crisis    */
+  --ipc-3-bg:     oklch(17% 0.04 100);
+  --ipc-3-border: oklch(38% 0.07 100);
 
-  /* ── Hero section ───────────────────────────────────────────────── */
-  --hero-bg:     oklch(19% 0.014 60);
-  --hero-border: oklch(32% 0.018 60);
+  /* ── Hero section — cosmic indigo ───────────────────────────────── */
+  --hero-bg:     oklch(17%  0.090 272);
+  --hero-border: oklch(28%  0.120 278);
 
-  /* ── Card elevation ─────────────────────────────────────────────── */
-  --shadow-card:       0 1px 3px oklch(0% 0 0 / 0.35), 0 1px 2px oklch(0% 0 0 / 0.22);
-  --shadow-card-hover: 0 4px 14px oklch(0% 0 0 / 0.45);
+  /* ── Card elevation — cool-shifted shadows ──────────────────────── */
+  --shadow-card:       0 1px 3px oklch(0% 0 0 / 0.50), 0 1px 2px oklch(0% 0 0 / 0.35);
+  --shadow-card-hover: 0 4px 14px oklch(0% 0 0 / 0.60);
 
   /* ── Inline alerts ──────────────────────────────────────────────── */
   --error:   oklch(72% 0.16 25);
   --success: oklch(72% 0.14 150);
 
-  /* ── Status — tuned for dark surfaces ──────────────────────────── */
+  /* ── Status — tuned for deep space surfaces ─────────────────────── */
   --open:              oklch(78%  0.14  48);
-  --open-bg:           oklch(24%  0.06  48);
-  --open-border:       oklch(40%  0.10  48);
+  --open-bg:           oklch(18%  0.06  48);
+  --open-border:       oklch(38%  0.10  48);
   --pending:           oklch(76%  0.11  78);
-  --pending-bg:        oklch(24%  0.05  78);
-  --pending-border:    oklch(40%  0.08  78);
+  --pending-bg:        oklch(18%  0.05  78);
+  --pending-border:    oklch(38%  0.08  78);
   --fulfilled:         oklch(72%  0.12  148);
-  --fulfilled-bg:      oklch(23%  0.05  148);
-  --fulfilled-border:  oklch(38%  0.08  148);
+  --fulfilled-bg:      oklch(17%  0.05  148);
+  --fulfilled-border:  oklch(36%  0.08  148);
 
   /* ── Base ───────────────────────────────────────────────────────── */
   min-height: 100dvh;

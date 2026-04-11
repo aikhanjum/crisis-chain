@@ -1,16 +1,15 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
   { href: "/ngo/dashboard", label: "Dashboard" },
-  { href: "/ngo/submit", label: "Submit Receipt" },
-  { href: "/ngo/register", label: "Register" },
+  { href: "/ngo/submit",    label: "Request"   },
+  { href: "/ngo/register",  label: "Profile"   },
 ] as const;
 
-export function NgoHeader({ rightSlot }: { rightSlot?: React.ReactNode }) {
+export function NgoHeader() {
   const pathname = usePathname();
 
   return (
@@ -33,77 +32,48 @@ export function NgoHeader({ rightSlot }: { rightSlot?: React.ReactNode }) {
           minHeight: 56,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
           gap: 16,
           flexWrap: "wrap",
           paddingTop: 10,
           paddingBottom: 10,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <Link
-            href="/map"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: "var(--fs-ui)",
-              fontWeight: 600,
-              color: "var(--text-lo)",
-              textDecoration: "none",
-              padding: "5px 10px",
-              borderRadius: 5,
-              border: "1px solid var(--border)",
-              backgroundColor: "var(--bg)",
-            }}
-          >
-            <ArrowLeft style={{ width: 13, height: 13 }} />
-            Map
-          </Link>
-
-          <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
-
-          <Link
-            href="/ngo/dashboard"
-            style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12, textDecoration: "none" }}
-          >
-            <img src="/favicon.svg" alt="CrisisChain" style={{ width: 28, height: 28, flexShrink: 0 }} />
-            <div>
-              <span
-                style={{
-                  fontSize: "var(--fs-brand)",
-                  fontWeight: 600,
-                  color: "var(--text-hi)",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                CrisisChain
-              </span>
-              <span style={{ color: "var(--border-mid)", fontSize: "var(--fs-sm)", userSelect: "none", margin: "0 5px" }}>/</span>
-              <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>NGO Portal</span>
-            </div>
-          </Link>
-
-          <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
-
-          <nav style={{ display: "flex", gap: 2 }}>
-            {NAV.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`ngo-nav-link${pathname === href ? " ngo-nav-link-active" : ""}`}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-
-        {rightSlot ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {rightSlot}
+        <Link
+          href="/map"
+          style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12, textDecoration: "none" }}
+        >
+          <img src="/favicon.svg" alt="CrisisChain" style={{ width: 28, height: 28, flexShrink: 0 }} />
+          <div>
+            <span
+              style={{
+                fontSize: "var(--fs-brand)",
+                fontWeight: 600,
+                color: "var(--text-hi)",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              CrisisChain
+            </span>
+            <span style={{ color: "var(--border-mid)", fontSize: "var(--fs-sm)", userSelect: "none", margin: "0 5px" }}>/</span>
+            <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>NGO Portal</span>
           </div>
-        ) : null}
+        </Link>
+
+        <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
+
+        <nav style={{ display: "flex", gap: 2 }}>
+          {NAV.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`ngo-nav-link${pathname === href ? " ngo-nav-link-active" : ""}`}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+
       </div>
     </header>
   );

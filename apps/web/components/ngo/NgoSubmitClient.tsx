@@ -10,7 +10,6 @@ import { API_GATEWAY_URL } from "@/lib/constants";
 import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
-import { NgoWalletButton } from "@/components/ngo/NgoWalletButton";
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "9px 12px", borderRadius: 5,
@@ -29,11 +28,6 @@ function SubmitInner() {
   const emailAuth = useEmailAuth();
   const token = walletAuth.token ?? emailAuth.token;
   const isAuthenticated = walletAuth.isAuthenticated || emailAuth.isAuthenticated;
-
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
-  const [passwordInput, setPasswordInput] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
 
   const { data: allRegions = [], isLoading: regionsLoading } = useCrisisRegions();
   const [operatedRegions, setOperatedRegions] = useState<string[] | null>(null);
@@ -63,17 +57,6 @@ function SubmitInner() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<{ receipt_id: string; submitted_at: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  async function onEmailSignIn(e: React.FormEvent) {
-    e.preventDefault();
-    setAuthError(null);
-    try {
-      await emailAuth.login(emailInput, passwordInput);
-      setShowEmailForm(false);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "Sign-in failed");
-    }
-  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -120,28 +103,7 @@ function SubmitInner() {
 
   return (
     <div>
-      <NgoHeader rightSlot={headerRight} />
-
-      {showEmailForm && !isAuthenticated && (
-        <div style={{ position: "sticky", top: 56, zIndex: 39, backgroundColor: "var(--surface)", borderBottom: "1px solid var(--border-faint)" }}>
-          <form
-            onSubmit={onEmailSignIn}
-            style={{ maxWidth: 1160, margin: "0 auto", padding: "8px 32px", display: "flex", alignItems: "center", gap: 8 }}
-          >
-            <input type="email" required placeholder="Email" value={emailInput} onChange={(e) => setEmailInput(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 5, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text-hi)", fontSize: "var(--fs-ui)", width: 200 }} />
-            <input type="password" required placeholder="Password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 5, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text-hi)", fontSize: "var(--fs-ui)", width: 160 }} />
-            <button type="submit" disabled={emailAuth.loading}
-              style={{ padding: "7px 14px", borderRadius: 5, backgroundColor: "var(--accent)", color: "var(--accent-fg)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "none", cursor: emailAuth.loading ? "wait" : "pointer" }}>
-              {emailAuth.loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
-          {authError && (
-            <p style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px", fontSize: "var(--fs-xs)", color: "var(--open)" }}>{authError}</p>
-          )}
-        </div>
-      )}
+      <NgoHeader />
 
       <div style={{ maxWidth: 520, margin: "0 auto", padding: "48px 32px 96px" }}>
         <div className="fu fu-1" style={{ marginBottom: 32 }}>
@@ -156,7 +118,7 @@ function SubmitInner() {
         {!isAuthenticated ? (
           <div className="fu fu-2" style={{ marginTop: 28, padding: 24, textAlign: "center", border: "1px solid var(--border-faint)", borderRadius: 10, backgroundColor: "var(--surface)" }}>
             <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-body)", marginBottom: 4 }}>Sign in to submit a request.</p>
-            <p style={{ color: "var(--text-vlo)", fontSize: "var(--fs-xs)" }}>Use "Email sign in" in the header, or connect your wallet.</p>
+            <p style={{ color: "var(--text-vlo)", fontSize: "var(--fs-xs)" }}>Connect your wallet and sign in from the <Link href="/ngo/register" style={{ color: "var(--accent-text)", textDecoration: "none" }}>Profile</Link> page.</p>
           </div>
         ) : success ? (
           <div className="fu fu-2" style={{ marginTop: 28, padding: 28, textAlign: "center", border: "1px solid var(--fulfilled-border)", borderRadius: 10, backgroundColor: "var(--fulfilled-bg)" }}>

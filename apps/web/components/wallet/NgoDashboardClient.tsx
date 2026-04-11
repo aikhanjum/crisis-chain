@@ -3,25 +3,22 @@
 import { darkTheme } from "@rainbow-me/rainbowkit";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
-import { useCallback, useMemo, useState, useEffect } from "react";
-import { formatUnits, parseUnits } from "viem";
-import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
+import { ArrowUpRight, CheckCircle2, CircleDot, Clock } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { formatUnits } from "viem";
+import { useAccount } from "wagmi";
 
 import { Web3Provider } from "@/providers/Web3Provider";
-import { API_GATEWAY_URL, CHAIN_ID, EXPLORER_BASE_URL, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
-import { humanityTestnet } from "@/lib/humanity";
-import { erc20Abi, vaultAbi, toBytes32 } from "@/lib/wallet-contracts";
-import { getNgoQueue, getPoolLedger, markReceiptPaid, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
+import { API_GATEWAY_URL, EXPLORER_BASE_URL, USDC_DECIMALS } from "@/lib/constants";
+import { getNgoQueue, getPoolLedger, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
 import { poolIdFromRegionId } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
-import { NgoWalletButton } from "@/components/ngo/NgoWalletButton";
 
 type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
 
-const COL = "3.5rem 4rem 1fr 8.5rem 8rem 5.5rem 2.5rem";
+const COL = "3.5rem 4rem 1fr 8.5rem 8rem";
 
 const subLabel: React.CSSProperties = {
   fontSize: "var(--fs-xs)",
@@ -44,6 +41,21 @@ const IPC = {
   4: { color: "var(--open)", bg: "var(--open-bg)", border: "var(--open-border)" },
   3: { color: "var(--pending)", bg: "var(--pending-bg)", border: "var(--pending-border)" },
 } as const;
+
+function shortRegionName(name: string): string {
+  return name
+    .replace(/\s+(Conflict Zone|Gang Crisis|Displacement|Recovery Crisis|Frontline|Famine Risk|Drought|Violence|Crisis Zone)$/i, "")
+    .trim();
+}
+
+function formatPop(n: number): string {
+  if (n >= 1_000_000) {
+    const v = n / 1_000_000;
+    return `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)}M`;
+  }
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return String(n);
+}
 
 function StatusIcon({ status, className }: { status: UiStatus; className?: string }) {
   const s = { style: { width: 8, height: 8 }, className };
@@ -72,39 +84,30 @@ function poolKeyForRegion(r: CrisisRegion): string {
 
 function NgoDashboardInner() {
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
-  const { switchChainAsync } = useSwitchChain();
-  const publicClient = usePublicClient();
-  const { writeContractAsync } = useWriteContract();
   const walletAuth = useNgoAuth();
   const emailAuth = useEmailAuth();
   const token = walletAuth.token ?? emailAuth.token;
   const isAuthenticated = walletAuth.isAuthenticated || emailAuth.isAuthenticated;
-  function logout() { walletAuth.logout(); emailAuth.logout(); }
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
-  const [passwordInput, setPasswordInput] = useState("");
-  const [payingId, setPayingId] = useState<string | null>(null);
-  const [payError, setPayError] = useState<string | null>(null);
-  const [paySuccess, setPaySuccess] = useState<string | null>(null);
-  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   const { data: allRegions = [], isLoading: regionsLoading, error: regionsError } = useCrisisRegions();
   const [operatedRegions, setOperatedRegions] = useState<string[] | null>(null);
+  const [ngoProfile, setNgoProfile] = useState<{ org_name: string; status: string; country: string } | null>(null);
 
   useEffect(() => {
-    if (!token) { setOperatedRegions(null); return; }
+    if (!token) { setOperatedRegions(null); setNgoProfile(null); return; }
     fetch(`${API_GATEWAY_URL}/ngo/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
-      .then((body: { operated_regions?: string[] }) => {
+      .then((body: { operated_regions?: string[]; org_name?: string; status?: string; country?: string }) => {
         if (Array.isArray(body.operated_regions) && body.operated_regions.length > 0) {
           setOperatedRegions(body.operated_regions);
         } else {
           setOperatedRegions(null);
         }
+        if (body.org_name) {
+          setNgoProfile({ org_name: body.org_name, status: body.status ?? "pending", country: body.country ?? "" });
+        }
       })
-      .catch(() => setOperatedRegions(null));
+      .catch(() => { setOperatedRegions(null); setNgoProfile(null); });
   }, [token]);
 
   // Restrict to NGO's operated regions if available
@@ -140,49 +143,6 @@ function NgoDashboardInner() {
     queryFn: () => getNgoQueue(token!),
     enabled: isAuthenticated && !!token,
   });
-
-  const { data: usdcBalance = 0n } = useReadContract({
-    address: USDC_ADDRESS || undefined,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: Boolean(USDC_ADDRESS && address) },
-  });
-
-  const isConfigured = Boolean(USDC_ADDRESS && VAULT_ADDRESS);
-
-  const onPay = useCallback(async (receipt: NgoReceiptRequest) => {
-    if (!publicClient || !VAULT_ADDRESS || !token) return;
-    setPayError(null);
-    setPaySuccess(null);
-    setPayingId(receipt.id);
-    try {
-      if (!isConnected) throw new Error("Connect wallet first");
-      if (chainId !== CHAIN_ID) {
-        await switchChainAsync({ chainId: humanityTestnet.id });
-      }
-
-      const poolId = poolIdFromRegionId(receipt.region_id);
-      const amountBase = parseUnits(String(receipt.requested_amount), USDC_DECIMALS);
-      const payoutRef = toBytes32(receipt.id.slice(0, 31));
-
-      const hash = await writeContractAsync({
-        address: VAULT_ADDRESS,
-        abi: vaultAbi,
-        functionName: "payout",
-        args: [BigInt(poolId), receipt.ngo_wallet as `0x${string}`, amountBase, payoutRef],
-      });
-
-      await publicClient.waitForTransactionReceipt({ hash });
-      await markReceiptPaid(receipt.id, hash, token);
-      setPaySuccess(`Paid! tx: ${hash.slice(0, 10)}…`);
-    } catch (err) {
-      setPayError(err instanceof Error ? err.message : "Payout failed");
-    } finally {
-      setPayingId(null);
-    }
-  }, [publicClient, writeContractAsync, isConnected, chainId, switchChainAsync, token]);
-  const isWrongNetwork = isConnected && chainId !== CHAIN_ID;
 
   const onChainPayouts = useMemo(() => {
     if (!address) return [];
@@ -294,324 +254,327 @@ function NgoDashboardInner() {
     });
   }, [poolKeys, ledgerQueries, regions]);
 
+  // The ledger card for the single highest-severity region
+  const primaryPoolCard = useMemo(() => {
+    if (!primaryRegion) return null;
+    const key = poolKeyForRegion(primaryRegion);
+    return poolCards.find((p) => p.id === key) ?? null;
+  }, [primaryRegion, poolCards]);
+
+  // USDC totals per request status
+  const requestFinancials = useMemo(() => {
+    if (!isAuthenticated || queue.length === 0) return null;
+    const totals: Record<UiStatus, number> = { open: 0, pending: 0, fulfilled: 0, rejected: 0 };
+    for (const r of queue) {
+      const ui = mapReceiptStatus(r.status);
+      const amt = r.status === "pending"
+        ? Number(r.requested_amount)
+        : Number(r.approved_amount ?? r.requested_amount);
+      if (!isNaN(amt)) totals[ui] += amt;
+    }
+    return totals;
+  }, [isAuthenticated, queue]);
+
+  // Aggregate across all operated pools
+  const poolAggregate = useMemo(() => {
+    let net = 0n;
+    let donated = 0n;
+    let paidOut = 0n;
+    let loaded = 0;
+    const donors = new Set<string>();
+    for (const q of ledgerQueries) {
+      if (!q.data) continue;
+      donated += BigInt(q.data.totalDonatedRaw || "0");
+      paidOut += BigInt(q.data.totalPaidOutRaw || "0");
+      net += BigInt(q.data.netRaw || "0");
+      loaded += 1;
+      for (const d of q.data.donations) {
+        if (d.actor) donors.add(d.actor.toLowerCase());
+      }
+    }
+    return {
+      net: Number(formatUnits(net, USDC_DECIMALS)),
+      donated: Number(formatUnits(donated, USDC_DECIMALS)),
+      paidOut: Number(formatUnits(paidOut, USDC_DECIMALS)),
+      totalMembers: donors.size,
+      loading: loaded === 0 && ledgerQueries.some((q) => q.isLoading),
+    };
+  }, [ledgerQueries]);
+
   const ipcHint = primaryRegion ? IPC_STYLE[primaryRegion.severityLevel] : null;
-  const ipc = ipcHint ? IPC[ipcHint.key] : IPC[3];
-
-  async function onSignIn() {
-    setAuthError(null);
-    try {
-      await walletAuth.login();
-    } catch (e) {
-      setAuthError(e instanceof Error ? e.message : "Sign-in failed");
-    }
-  }
-
-  async function onEmailSignIn(e: React.FormEvent) {
-    e.preventDefault();
-    setAuthError(null);
-    try {
-      await emailAuth.login(emailInput, passwordInput);
-      setShowEmailForm(false);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "Sign-in failed");
-    }
-  }
-
-  const balanceLabel =
-    USDC_ADDRESS && isConnected && address
-      ? `${Number(formatUnits(usdcBalance, USDC_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
-      : null;
-
-  const headerRight = (
-    <>
-      <NgoWalletButton />
-      {balanceLabel ? (
-        <span
-          style={{
-            fontSize: "var(--fs-xs)",
-            color: "var(--text-vlo)",
-            fontFamily: "var(--font-mono)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {balanceLabel}
-        </span>
-      ) : null}
-      {!isAuthenticated ? (
-        <>
-          {isConnected && (
-            <button
-              type="button"
-              className="ngo-cta"
-              style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: walletAuth.loading ? "wait" : "pointer" }}
-              disabled={walletAuth.loading}
-              onClick={() => onSignIn()}
-            >
-              {walletAuth.loading ? "Signing…" : "Sign in with wallet"}
-            </button>
-          )}
-          <button
-            type="button"
-            className="ngo-cta"
-            style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
-            onClick={() => setShowEmailForm((v) => !v)}
-          >
-            {showEmailForm ? "Cancel" : "Email sign in"}
-          </button>
-        </>
-      ) : null}
-      {isAuthenticated && (
-        <button
-          type="button"
-          className="ngo-cta"
-          style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-lo)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
-          onClick={logout}
-        >
-          Sign out
-        </button>
-      )}
-      <Link href="/ngo/submit">
-        <button
-          type="button"
-          className="ngo-cta"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "7px 15px",
-            borderRadius: 5,
-            backgroundColor: "var(--accent)",
-            color: "var(--accent-fg)",
-            fontSize: "var(--fs-ui)",
-            fontWeight: 600,
-            letterSpacing: "0.005em",
-            border: "none",
-            cursor: "pointer",
-            transition: "background-color 0.12s",
-          }}
-        >
-          <Plus style={{ width: 13, height: 13 }} />
-          Submit Receipt
-        </button>
-      </Link>
-    </>
-  );
+  // Use explicit ipcPhase from DB when available, fall back to severity-level derivation
+  const ipcPhaseDisplay = primaryRegion?.ipcPhase ?? ipcHint?.phase ?? 3;
+  const ipcLabelMap: Record<number, string> = { 5: "Famine", 4: "Emergency", 3: "Crisis", 2: "Stressed", 1: "Minimal" };
+  const ipcLabel = ipcLabelMap[ipcPhaseDisplay] ?? ipcHint?.label ?? "Crisis";
+  const ipcKey = (ipcPhaseDisplay >= 5 ? 5 : ipcPhaseDisplay >= 4 ? 4 : 3) as 3 | 4 | 5;
+  const ipc = IPC[ipcKey];
 
   return (
     <div>
-      <NgoHeader rightSlot={headerRight} />
-
-      {showEmailForm && !isAuthenticated ? (
-        <div style={{ position: "sticky", top: 56, zIndex: 39, backgroundColor: "var(--surface)", borderBottom: "1px solid var(--border-faint)" }}>
-          <form
-            onSubmit={onEmailSignIn}
-            style={{ maxWidth: 1160, margin: "0 auto", padding: "8px 32px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
-          >
-            <input
-              type="email"
-              required
-              placeholder="Email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 5, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text-hi)", fontSize: "var(--fs-ui)", width: 200 }}
-            />
-            <input
-              type="password"
-              required
-              placeholder="Password"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 5, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text-hi)", fontSize: "var(--fs-ui)", width: 160 }}
-            />
-            <button
-              type="submit"
-              disabled={emailAuth.loading}
-              style={{ padding: "7px 14px", borderRadius: 5, backgroundColor: "var(--accent)", color: "var(--accent-fg)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "none", cursor: emailAuth.loading ? "wait" : "pointer" }}
-            >
-              {emailAuth.loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
-          {authError ? (
-            <p style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px", fontSize: "var(--fs-xs)", color: "var(--open)" }}>
-              {authError}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      <NgoHeader />
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "36px 32px 96px" }}>
         {!isAuthenticated && (
           <div style={{ padding: "48px 24px", textAlign: "center", border: "1px solid var(--border-faint)", borderRadius: 10, backgroundColor: "var(--surface)" }}>
             <p style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-hi)", marginBottom: 8 }}>Sign in to access the NGO dashboard</p>
-            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Use your wallet or click &quot;Email sign in&quot; in the header.</p>
+            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Connect your wallet and sign in from the <Link href="/ngo/register" style={{ color: "var(--accent-text)", textDecoration: "none" }}>Profile</Link> page.</p>
             <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>Demo: test@crisischain.org / demo1234</p>
           </div>
         )}
-        {isAuthenticated && (<section className="fu fu-2" style={{ marginBottom: 40 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-            <p className="ngo-label" style={{ marginBottom: 0 }}>
-              Region Overview
-            </p>
-            <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>Crisis nodes API</span>
-          </div>
+        {isAuthenticated && (
+          <section className="fu fu-2" style={{ marginBottom: 48, paddingBottom: 40, borderBottom: "1px solid var(--border-faint)" }}>
+            {regionsError ? (
+              <p style={{ color: "var(--open)", fontSize: "var(--fs-ui)" }}>Could not load regions. Is the API gateway running?</p>
+            ) : regionsLoading && !primaryRegion ? (
+              <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-ui)" }}>Loading region data…</p>
+            ) : !primaryRegion ? (
+              <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-ui)" }}>No crisis regions in the database yet.</p>
+            ) : (
+              <>
+                {/* Region name + IPC phase */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, marginBottom: 28 }}>
+                  <div>
+                    <p style={{ ...subLabel, marginBottom: 8 }}>Primary operating region</p>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+                      <h2 style={{
+                        fontSize: "var(--fs-hero)",
+                        fontWeight: 700,
+                        color: "var(--text-hi)",
+                        lineHeight: 1,
+                        letterSpacing: "-0.025em",
+                        margin: 0,
+                        fontFamily: "var(--font-sans)",
+                      }}>
+                        {shortRegionName(primaryRegion.name)}
+                      </h2>
+                      <span style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", fontWeight: 400 }}>
+                        {primaryRegion.country}
+                      </span>
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "5px 12px",
+                      borderRadius: 4,
+                      fontSize: "var(--fs-ui)",
+                      fontWeight: 700,
+                      letterSpacing: "0.02em",
+                      color: ipc.color,
+                      backgroundColor: ipc.bg,
+                      outline: `1px solid ${ipc.border}`,
+                      outlineOffset: -1,
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                      marginTop: 4,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    IPC {ipcPhaseDisplay} — {ipcLabel}
+                  </span>
+                </div>
 
-          {regionsError ? (
-            <p style={{ color: "var(--open)", fontSize: "var(--fs-ui)" }}>Could not load regions. Is the API gateway running?</p>
-          ) : regionsLoading && !primaryRegion ? (
-            <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-ui)" }}>Loading region data…</p>
-          ) : !primaryRegion ? (
-            <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-ui)" }}>No crisis regions in the database yet.</p>
-          ) : (
-            <div
-              style={{
-                backgroundColor: "var(--surface)",
-                border: "1px solid var(--border-faint)",
-                borderRadius: 8,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "16px 20px",
-                  borderBottom: "1px solid var(--border-faint)",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "var(--fs-body)",
-                    fontWeight: 600,
-                    color: "var(--text-hi)",
-                    letterSpacing: "-0.005em",
-                  }}
-                >
-                  {primaryRegion.name}
-                </span>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "3px 9px",
-                    borderRadius: 4,
-                    fontSize: "var(--fs-xs)",
-                    fontWeight: 600,
-                    letterSpacing: "0.02em",
-                    color: ipc.color,
-                    backgroundColor: ipc.bg,
-                    outline: `1px solid ${ipc.border}`,
-                    outlineOffset: -1,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  IPC {ipcHint?.phase} — {ipcHint?.label}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(3, 1fr)",
-                  borderBottom: "1px solid var(--border-faint)",
-                }}
-              >
-                <div style={{ padding: "18px 20px", borderRight: "1px solid var(--border-faint)" }}>
-                  <p style={subLabel}>Active NGOs</p>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                    <span
-                      style={{
+                {/* Population impact stats row */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 32, marginBottom: 20 }}>
+                  {/* Affected population — hero stat (36px if available, else severity score) */}
+                  <div style={{ flexShrink: 0 }}>
+                    <p style={subLabel}>{primaryRegion.affectedPopulation != null ? "Affected" : "Severity index"}</p>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                      <span style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: "var(--fs-count)",
+                        fontSize: "var(--fs-hero)",
                         fontWeight: 500,
                         color: "var(--text-hi)",
                         fontVariantNumeric: "tabular-nums lining-nums",
                         lineHeight: 1,
-                      }}
-                    >
-                      {primaryRegion.activeNgos}
-                    </span>
+                        letterSpacing: "-0.02em",
+                      }}>
+                        {primaryRegion.affectedPopulation != null
+                          ? formatPop(primaryRegion.affectedPopulation)
+                          : primaryRegion.severityScore.toFixed(1)}
+                      </span>
+                      {primaryRegion.affectedPopulation == null && (
+                        <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>/100</span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", margin: "3px 0 0", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                      {primaryRegion.affectedPopulation != null ? "people IPC 3+" : "composite score"}
+                    </p>
                   </div>
-                </div>
 
-                <div style={{ padding: "18px 20px", borderRight: "1px solid var(--border-faint)" }}>
-                  <p style={subLabel}>Severity score</p>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "var(--fs-count)",
-                        fontWeight: 500,
-                        color: "var(--text-hi)",
-                        fontVariantNumeric: "tabular-nums lining-nums",
-                        lineHeight: 1,
-                      }}
-                    >
-                      {primaryRegion.severityScore.toFixed(1)}
+                  {/* Divider */}
+                  <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "var(--border-faint)", flexShrink: 0 }} />
+
+                  {/* Displaced */}
+                  {primaryRegion.displacedCount != null && (
+                    <>
+                      <div style={{ flexShrink: 0 }}>
+                        <p style={subLabel}>Displaced</p>
+                        <span style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "var(--fs-count)",
+                          fontWeight: 500,
+                          color: "var(--text-hi)",
+                          fontVariantNumeric: "tabular-nums lining-nums",
+                          lineHeight: 1,
+                        }}>
+                          {formatPop(primaryRegion.displacedCount)}
+                        </span>
+                        <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", margin: "3px 0 0", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>internally</p>
+                      </div>
+                      <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "var(--border-faint)", flexShrink: 0 }} />
+                    </>
+                  )}
+
+                  {/* Food insecure % */}
+                  {primaryRegion.foodInsecurePct != null && (
+                    <>
+                      <div style={{ flexShrink: 0 }}>
+                        <p style={subLabel}>Food insecure</p>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
+                          <span style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "var(--fs-count)",
+                            fontWeight: 500,
+                            color: "var(--text-hi)",
+                            fontVariantNumeric: "tabular-nums lining-nums",
+                            lineHeight: 1,
+                          }}>
+                            {primaryRegion.foodInsecurePct % 1 === 0
+                              ? primaryRegion.foodInsecurePct.toFixed(0)
+                              : primaryRegion.foodInsecurePct.toFixed(1)}
+                          </span>
+                          <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>%</span>
+                        </div>
+                        <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", margin: "3px 0 0", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>of population</p>
+                      </div>
+                      <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "var(--border-faint)", flexShrink: 0 }} />
+                    </>
+                  )}
+
+                  {/* NGOs in region */}
+                  <div style={{ flexShrink: 0 }}>
+                    <p style={subLabel}>NGOs in region</p>
+                    <span style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--fs-count)",
+                      fontWeight: 500,
+                      color: primaryRegion.activeNgos > 0 ? "var(--text-hi)" : "var(--text-vlo)",
+                      fontVariantNumeric: "tabular-nums lining-nums",
+                      lineHeight: 1,
+                    }}>
+                      {primaryRegion.activeNgos > 0 ? primaryRegion.activeNgos : "—"}
                     </span>
-                    <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>/&nbsp;100</span>
+                    <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", margin: "3px 0 0", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                      {primaryRegion.activeNgos > 0 ? "registered" : "run discover-ngos"}
+                    </p>
                   </div>
-                  <p style={{ marginTop: 4, fontSize: "var(--fs-xs)", color: "var(--text-lo)" }}>
-                    {primaryRegion.severityLevel.replace(/^\w/, (c) => c.toUpperCase())} · CrisisChain index
-                  </p>
-                </div>
 
-                <div style={{ padding: "18px 20px" }}>
-                  <p style={subLabel}>Summary</p>
-                  <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-mid)", lineHeight: 1.45, margin: 0 }}>
-                    {summaryExpanded ? primaryRegion.summary : primaryRegion.summary.slice(0, 220)}
-                    {!summaryExpanded && primaryRegion.summary.length > 220 ? "…" : ""}
-                  </p>
-                  {primaryRegion.summary.length > 220 && (
-                    <button
-                      onClick={() => setSummaryExpanded((v) => !v)}
-                      style={{
-                        marginTop: 6,
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        cursor: "pointer",
-                        fontSize: "var(--fs-xs)",
-                        color: "var(--accent-text)",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {summaryExpanded ? "Show less" : "Show more"}
-                    </button>
+                  {/* Pool balance — available USDC in this region's pool */}
+                  {primaryPoolCard && !primaryPoolCard.loading && !primaryPoolCard.error && (
+                    <>
+                      <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "var(--border-faint)", flexShrink: 0 }} />
+                      <div style={{ flexShrink: 0 }}>
+                        <p style={subLabel}>Pool balance</p>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                          <span style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "var(--fs-count)",
+                            fontWeight: 500,
+                            color: "var(--text-hi)",
+                            fontVariantNumeric: "tabular-nums lining-nums",
+                            lineHeight: 1,
+                          }}>
+                            {(primaryPoolCard.total - primaryPoolCard.committed).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </span>
+                          <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>USDC</span>
+                        </div>
+                        <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", margin: "3px 0 0", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>available</p>
+                      </div>
+                    </>
                   )}
                 </div>
-              </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "11px 20px",
-                }}
-              >
-                <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>
-                  Pool key {poolKeyForRegion(primaryRegion)} · Updated {new Date(primaryRegion.lastUpdated).toLocaleDateString()}
-                </span>
-                <Link
-                  href={`/donate/${primaryRegion.id}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    fontSize: "var(--fs-ui)",
-                    color: "var(--accent-text)",
-                    textDecoration: "none",
-                    fontWeight: 500,
-                  }}
-                >
-                  Open donate page
-                  <ArrowUpRight style={{ width: 13, height: 13 }} />
-                </Link>
-              </div>
+                {/* Footer meta + donate link */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
+                  <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", margin: 0 }}>
+                    Pool #{poolKeyForRegion(primaryRegion)} · Updated {new Date(primaryRegion.lastUpdated).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} · HAPI / UN OCHA · Severity index {primaryRegion.severityScore.toFixed(0)}/100
+                  </p>
+                  <Link
+                    href={`/donate/${primaryRegion.id}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: "var(--fs-xs)",
+                      color: "var(--text-vlo)",
+                      textDecoration: "none",
+                      fontWeight: 500,
+                      whiteSpace: "nowrap",
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    Donate page
+                    <ArrowUpRight style={{ width: 11, height: 11 }} />
+                  </Link>
+                </div>
+              </>
+            )}
+          </section>
+        )}
+        {/* Operating regions — compact multi-region table, shown only when NGO has >1 region */}
+        {isAuthenticated && regions.length > 1 && (
+          <section style={{ marginBottom: 48 }}>
+            <p className="ngo-label" style={{ marginBottom: 10 }}>Operating regions</p>
+            <div style={{ border: "1px solid var(--border-faint)", borderRadius: 7, overflow: "hidden", backgroundColor: "var(--surface)" }}>
+              {[...regions].sort((a, b) => b.severityScore - a.severityScore).map((region, idx) => {
+                const rPhase = region.ipcPhase ?? IPC_STYLE[region.severityLevel]?.phase ?? 3;
+                const rKey = (rPhase >= 5 ? 5 : rPhase >= 4 ? 4 : 3) as 3 | 4 | 5;
+                const rIpc = IPC[rKey];
+                const rCard = poolCards.find((p) => p.id === poolKeyForRegion(region));
+                const available = rCard && !rCard.loading && !rCard.error ? rCard.total - rCard.committed : null;
+                return (
+                  <div
+                    key={region.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "auto 1fr auto auto",
+                      gap: 12,
+                      alignItems: "center",
+                      padding: "10px 16px",
+                      borderTop: idx > 0 ? "1px solid var(--border-faint)" : "none",
+                    }}
+                  >
+                    <span style={{
+                      fontSize: "var(--fs-xs)", fontWeight: 700, color: rIpc.color,
+                      backgroundColor: rIpc.bg, outline: `1px solid ${rIpc.border}`, outlineOffset: -1,
+                      padding: "2px 6px", borderRadius: 3, whiteSpace: "nowrap",
+                    }}>
+                      IPC {rPhase}
+                    </span>
+                    <span style={{ fontSize: "var(--fs-body)", color: "var(--text-mid)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {shortRegionName(region.name)}
+                      <span style={{ color: "var(--text-vlo)", marginLeft: 8, fontSize: "var(--fs-xs)" }}>{region.country}</span>
+                    </span>
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: "var(--fs-ui)", fontVariantNumeric: "tabular-nums",
+                      color: available != null ? "var(--text-lo)" : "var(--text-vlo)", textAlign: "right", whiteSpace: "nowrap",
+                    }}>
+                      {available != null
+                        ? <>{available.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>USDC</span></>
+                        : "—"}
+                    </span>
+                    <Link href={`/donate/${region.id}`} style={{ color: "var(--text-vlo)", textDecoration: "none", display: "flex" }}>
+                      <ArrowUpRight style={{ width: 12, height: 12 }} />
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </section>)}
+          </section>
+        )}
+
         {isAuthenticated && <div className="ngo-grid">
           <section className="fu fu-3">
             <p className="ngo-label">
@@ -655,8 +618,6 @@ function NgoDashboardInner() {
                   <span>Item</span>
                   <span style={{ textAlign: "right" }}>Amount</span>
                   <span style={{ textAlign: "center" }}>Status</span>
-                  <span style={{ textAlign: "center" }}>Action</span>
-                  <span />
                 </div>
 
                 {tableRows.map((tx, i) => (
@@ -672,16 +633,34 @@ function NgoDashboardInner() {
                       backgroundColor: "var(--surface)",
                     }}
                   >
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "var(--fs-xs)",
-                        color: "var(--text-vlo)",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      {tx.id}
-                    </span>
+                    {tx.tx ? (
+                      <a
+                        href={`${EXPLORER_BASE_URL.replace(/\/$/, "")}/tx/${tx.tx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "var(--fs-xs)",
+                          color: "var(--text-vlo)",
+                          fontVariantNumeric: "tabular-nums",
+                          textDecoration: "none",
+                        }}
+                        title="View on explorer"
+                      >
+                        {tx.id}
+                      </a>
+                    ) : (
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "var(--fs-xs)",
+                          color: "var(--text-vlo)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {tx.id}
+                      </span>
+                    )}
                     <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>{tx.date}</span>
                     <span
                       style={{
@@ -713,55 +692,9 @@ function NgoDashboardInner() {
                         {chipLabel(tx.status)}
                       </span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                      {tx.rawReceipt && tx.rawReceipt.status === "pending" ? (
-                        <button
-                          disabled={payingId === tx.rawReceipt.id || !isConnected}
-                          onClick={() => tx.rawReceipt && onPay(tx.rawReceipt)}
-                          style={{
-                            padding: "4px 12px",
-                            fontSize: "var(--fs-xs)",
-                            fontWeight: 600,
-                            borderRadius: 5,
-                            border: "none",
-                            cursor: payingId ? "not-allowed" : "pointer",
-                            backgroundColor: "var(--accent)",
-                            color: "var(--accent-fg)",
-                          }}
-                        >
-                          {payingId === tx.rawReceipt.id ? "Paying…" : "Pay"}
-                        </button>
-                      ) : (
-                        <span style={{ color: "var(--text-vlo)", fontSize: "var(--fs-xs)" }}>
-                          {tx.rawReceipt?.status === "paid" ? "Paid" : "—"}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                      {tx.tx ? (
-                        <a
-                          href={`${EXPLORER_BASE_URL.replace(/\/$/, "")}/tx/${tx.tx}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: "var(--accent-text)" }}
-                          title="View on explorer"
-                        >
-                          <ArrowUpRight style={{ width: 14, height: 14 }} />
-                        </a>
-                      ) : (
-                        <span style={{ color: "var(--text-vlo)" }}>—</span>
-                      )}
-                    </div>
                   </div>
                 ))}
               </div>
-            )}
-
-            {payError && (
-              <p style={{ marginTop: 8, fontSize: "var(--fs-xs)", color: "var(--error)" }}>{payError}</p>
-            )}
-            {paySuccess && (
-              <p style={{ marginTop: 8, fontSize: "var(--fs-xs)", color: "var(--success)" }}>{paySuccess}</p>
             )}
 
             <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
@@ -773,6 +706,32 @@ function NgoDashboardInner() {
           </section>
 
           <aside style={{ display: "flex", flexDirection: "column", gap: 24, position: "sticky", top: 78 }}>
+            {/* NGO org profile */}
+            {ngoProfile && (
+              <div className="fu fu-4">
+                <p className="ngo-label">Organization</p>
+                <div style={{ border: "1px solid var(--border-faint)", borderRadius: 7, backgroundColor: "var(--surface)", padding: "14px 18px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <span style={{ fontSize: "var(--fs-body)", fontWeight: 600, color: "var(--text-hi)", lineHeight: 1.3 }}>
+                      {ngoProfile.org_name}
+                    </span>
+                    <span style={{
+                      padding: "2px 8px", borderRadius: 3, fontSize: "var(--fs-xs)", fontWeight: 700,
+                      whiteSpace: "nowrap", flexShrink: 0,
+                      ...(ngoProfile.status === "approved"
+                        ? { color: "var(--fulfilled)", backgroundColor: "var(--fulfilled-bg)", outline: "1px solid var(--fulfilled-border)", outlineOffset: -1 }
+                        : { color: "var(--pending)", backgroundColor: "var(--pending-bg)", outline: "1px solid var(--pending-border)", outlineOffset: -1 }),
+                    }}>
+                      {ngoProfile.status === "approved" ? "Approved" : "Pending review"}
+                    </span>
+                  </div>
+                  {ngoProfile.country && (
+                    <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", marginTop: 6 }}>{ngoProfile.country}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="fu fu-4">
               <p className="ngo-label">Requests</p>
               <div
@@ -790,24 +749,27 @@ function NgoDashboardInner() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      padding: "13px 20px",
+                      padding: "12px 18px",
                       borderTop: i > 0 ? "1px solid var(--border-faint)" : "none",
                     }}
                   >
-                    <span className={`chip chip-${s}`}>
-                      <StatusIcon status={s} className={s === "open" ? "ping" : undefined} />
-                      {s === "open" ? "Open" : s === "pending" ? "Pending" : "Fulfilled"}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "var(--fs-count)",
-                        fontWeight: 500,
-                        color: "var(--text-hi)",
-                        fontVariantNumeric: "tabular-nums lining-nums",
-                        lineHeight: 1,
-                      }}
-                    >
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)", fontWeight: 400 }}>
+                        {s === "open" ? "Open" : s === "pending" ? "Pending" : "Fulfilled"}
+                      </span>
+                      {requestFinancials && requestFinancials[s] > 0 && (
+                        <span style={{
+                          fontFamily: "var(--font-mono)", fontSize: "var(--fs-xs)",
+                          color: "var(--text-vlo)", fontVariantNumeric: "tabular-nums",
+                        }}>
+                          {requestFinancials[s].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
+                        </span>
+                      )}
+                    </div>
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: "var(--fs-count)", fontWeight: 500,
+                      color: "var(--text-hi)", fontVariantNumeric: "tabular-nums lining-nums", lineHeight: 1,
+                    }}>
                       {counts[s]}
                     </span>
                   </div>
@@ -816,119 +778,37 @@ function NgoDashboardInner() {
             </div>
 
             <div className="fu fu-5">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <p className="ngo-label" style={{ marginBottom: 0 }}>
-                  Pool membership
-                </p>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div
-                      style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: "var(--pool-committed)", flexShrink: 0 }}
-                    />
-                    <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-lo)" }}>Paid out</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: "var(--pool-in)", flexShrink: 0 }} />
-                    <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-lo)" }}>In pool</span>
-                  </div>
-                </div>
-              </div>
+              <p className="ngo-label">Pool membership</p>
 
               {poolKeys.length === 0 ? (
                 <p style={{ fontSize: "var(--fs-sm)", color: "var(--text-lo)" }}>Load regions to see pools.</p>
+              ) : poolAggregate.loading ? (
+                <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>Loading…</p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {poolCards.map((pool) => {
-                    const committedPct = pool.total > 0 ? (pool.committed / pool.total) * 100 : 0;
-                    const inPoolPct = pool.total > 0 ? 100 - committedPct : 0;
-
-                    return (
-                      <div
-                        key={pool.id}
-                        style={{
-                          padding: "16px 18px",
-                          borderRadius: 8,
-                          backgroundColor: "var(--surface)",
-                          border: "1px solid var(--border-faint)",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
-                          <span
-                            style={{
-                              fontFamily: "var(--font-mono)",
-                              fontSize: "var(--fs-xs)",
-                              padding: "2px 7px",
-                              borderRadius: 4,
-                              backgroundColor: "var(--accent-lo)",
-                              color: "var(--accent-text)",
-                              fontVariantNumeric: "tabular-nums",
-                              fontWeight: 500,
-                              flexShrink: 0,
-                            }}
-                          >
-                            #{pool.id}
-                          </span>
-                          <span style={{ fontSize: "var(--fs-body)", color: "var(--text-mid)", lineHeight: 1.3 }}>
-                            {pool.name}
-                          </span>
-                        </div>
-
-                        {pool.error ? (
-                          <p style={{ fontSize: "var(--fs-xs)", color: "var(--open)" }}>{pool.error}</p>
-                        ) : pool.loading ? (
-                          <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>Loading indexer…</p>
-                        ) : (
-                          <>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                              <div>
-                                <p style={{ ...subLabel, color: "var(--pool-committed)" }}>Paid out</p>
-                                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                                  <span
-                                    style={{
-                                      fontFamily: "var(--font-mono)",
-                                      fontSize: "var(--fs-ui)",
-                                      fontWeight: 600,
-                                      color: "var(--text-hi)",
-                                      fontVariantNumeric: "tabular-nums lining-nums",
-                                    }}
-                                  >
-                                    {pool.committed.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                  </span>
-                                  <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>USDC</span>
-                                </div>
-                              </div>
-                              <div>
-                                <p style={{ ...subLabel, color: "var(--pool-in)" }}>In pool</p>
-                                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                                  <span
-                                    style={{
-                                      fontFamily: "var(--font-mono)",
-                                      fontSize: "var(--fs-ui)",
-                                      fontWeight: 600,
-                                      color: "var(--text-hi)",
-                                      fontVariantNumeric: "tabular-nums lining-nums",
-                                    }}
-                                  >
-                                    {(pool.total - pool.committed).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                  </span>
-                                  <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>USDC</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div style={{ height: 5, borderRadius: 999, display: "flex", overflow: "hidden" }}>
-                              <div style={{ width: `${committedPct}%`, backgroundColor: "var(--pool-committed)", flexShrink: 0 }} />
-                              <div style={{ width: `${inPoolPct}%`, backgroundColor: "var(--pool-in)", flexShrink: 0 }} />
-                            </div>
-
-                            <p style={{ marginTop: 7, fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>
-                              {pool.total.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC donated (indexed)
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                <div style={{
+                  display: "flex", gap: 0,
+                  border: "1px solid var(--border-faint)", borderRadius: 7, overflow: "hidden",
+                  backgroundColor: "var(--surface)",
+                }}>
+                  {[
+                    { label: "Available", value: poolAggregate.net.toLocaleString(undefined, { maximumFractionDigits: 0 }), unit: "USDC" },
+                    { label: "Total donated", value: poolAggregate.donated.toLocaleString(undefined, { maximumFractionDigits: 0 }), unit: "USDC" },
+                    { label: "Total members", value: String(poolAggregate.totalMembers), unit: null },
+                  ].map(({ label, value, unit }, i) => (
+                    <div key={label} style={{
+                      flex: 1, padding: "12px 14px",
+                      borderLeft: i > 0 ? "1px solid var(--border-faint)" : "none",
+                    }}>
+                      <p style={{ ...subLabel, marginBottom: 4 }}>{label}</p>
+                      <span style={{
+                        fontFamily: "var(--font-mono)", fontSize: "var(--fs-body)", color: "var(--text-hi)",
+                        fontVariantNumeric: "tabular-nums lining-nums",
+                      }}>
+                        {value}
+                        {unit && <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", marginLeft: 3 }}>{unit}</span>}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

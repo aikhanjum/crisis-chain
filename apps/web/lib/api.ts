@@ -14,6 +14,18 @@ export type CrisisRegion = {
   sourceLinks: string[];
   /** On-chain pool id when deployed; otherwise derive with `poolIdFromRegionId` */
   poolId: string | null;
+  /** IPC food security phase (1–5). 3=Crisis, 4=Emergency, 5=Famine. */
+  ipcPhase?: number;
+  /** Total people in IPC phase 3+ (crisis/emergency/famine). */
+  affectedPopulation?: number;
+  /** Internally displaced persons (IDPs). */
+  displacedCount?: number;
+  /** Percentage of population in IPC phase 3+. */
+  foodInsecurePct?: number;
+  /** Primary crisis drivers, e.g. ["conflict", "drought"]. */
+  crisisType?: string[];
+  /** Active UN humanitarian coordination clusters. */
+  activeClusters?: string[];
 };
 
 export type PoolLedger = {
@@ -96,6 +108,12 @@ export function normalizeCrisisRegion(raw: Record<string, unknown>): CrisisRegio
         ? (raw.sourceLinks as unknown[]).map((x) => String(x))
         : [],
     poolId: poolStr,
+    ipcPhase: raw.ipc_phase != null ? asNumber(raw.ipc_phase) : undefined,
+    affectedPopulation: raw.affected_population != null ? asNumber(raw.affected_population) : undefined,
+    displacedCount: raw.displaced_count != null ? asNumber(raw.displaced_count) : undefined,
+    foodInsecurePct: raw.food_insecure_pct != null ? asNumber(raw.food_insecure_pct) : undefined,
+    crisisType: Array.isArray(raw.crisis_type) ? (raw.crisis_type as unknown[]).map(String) : undefined,
+    activeClusters: Array.isArray(raw.active_clusters) ? (raw.active_clusters as unknown[]).map(String) : undefined,
   };
 }
 
