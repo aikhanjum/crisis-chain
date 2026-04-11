@@ -44,9 +44,92 @@ export const vaultAbi = [
     ],
     outputs: [],
   },
+  {
+    type: "function",
+    stateMutability: "nonpayable",
+    name: "requestReimbursement",
+    inputs: [
+      { name: "poolId", type: "uint256" },
+      { name: "amount", type: "uint256" },
+      { name: "receiptRef", type: "bytes32" },
+    ],
+    outputs: [{ name: "requestId", type: "uint256" }],
+  },
+  {
+    type: "function",
+    stateMutability: "nonpayable",
+    name: "approveReimbursement",
+    inputs: [{ name: "requestId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    stateMutability: "nonpayable",
+    name: "configurePool",
+    inputs: [
+      { name: "poolId", type: "uint256" },
+      { name: "maxPayoutPerRequest", type: "uint256" },
+      { name: "cooldownOverride", type: "uint256" },
+      { name: "reserveBpsOverride", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    stateMutability: "view",
+    name: "poolConfigs",
+    inputs: [{ name: "poolId", type: "uint256" }],
+    outputs: [
+      { name: "maxPayoutPerRequest", type: "uint256" },
+      { name: "cooldownOverride", type: "uint256" },
+      { name: "reserveBpsOverride", type: "uint256" },
+      { name: "configured", type: "bool" },
+    ],
+  },
+  {
+    type: "function",
+    stateMutability: "view",
+    name: "reimbursementRequests",
+    inputs: [{ name: "requestId", type: "uint256" }],
+    outputs: [
+      { name: "poolId", type: "uint256" },
+      { name: "ngo", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "receiptRef", type: "bytes32" },
+      { name: "executed", type: "bool" },
+    ],
+  },
+  {
+    type: "function",
+    stateMutability: "view",
+    name: "nextRequestId",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    stateMutability: "view",
+    name: "poolBalances",
+    inputs: [{ name: "poolId", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    stateMutability: "view",
+    name: "NGO_ROLE",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    stateMutability: "view",
+    name: "PAYOUT_ROLE",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
 ] as const;
 
-export type TxAction = "approve" | "donate" | "payout";
+export type TxAction = "approve" | "donate" | "payout" | "requestReimbursement";
 
 export type TxRecord = {
   action: TxAction;

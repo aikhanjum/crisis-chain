@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { approveNgo, revokeNgo } from "../services/ngo";
+import { approveNgo, revokeNgo, grantNgoRole, revokeNgoRole } from "../services/ngo";
 
 const router = Router();
 
@@ -35,6 +35,40 @@ router.post("/revoke", async (req, res) => {
     res.json({ status: "revoked", walletAddress, txHash });
   } catch (err) {
     console.error("[ngos/revoke]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
+ * POST /ngos/grant-ngo-role
+ * Grants NGO_ROLE to a wallet on-chain, allowing it to call requestReimbursement().
+ * Body: { walletAddress: string }
+ */
+router.post("/grant-ngo-role", async (req, res) => {
+  const { walletAddress } = req.body as { walletAddress: string };
+  if (!walletAddress) return res.status(400).json({ error: "walletAddress required" });
+  try {
+    const txHash = await grantNgoRole(walletAddress as `0x${string}`);
+    res.json({ status: "ngo_role_granted", walletAddress, txHash });
+  } catch (err) {
+    console.error("[ngos/grant-ngo-role]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
+ * POST /ngos/revoke-ngo-role
+ * Revokes NGO_ROLE from a wallet on-chain.
+ * Body: { walletAddress: string }
+ */
+router.post("/revoke-ngo-role", async (req, res) => {
+  const { walletAddress } = req.body as { walletAddress: string };
+  if (!walletAddress) return res.status(400).json({ error: "walletAddress required" });
+  try {
+    const txHash = await revokeNgoRole(walletAddress as `0x${string}`);
+    res.json({ status: "ngo_role_revoked", walletAddress, txHash });
+  } catch (err) {
+    console.error("[ngos/revoke-ngo-role]", err);
     res.status(500).json({ error: String(err) });
   }
 });

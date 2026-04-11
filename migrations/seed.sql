@@ -138,3 +138,31 @@ INSERT INTO approved_items (keyword, category, notes) VALUES
   ('sanitary pad', 'hygiene_supplies', NULL),
   ('mask', 'hygiene_supplies', NULL)
 ON CONFLICT (keyword) DO NOTHING;
+
+-- =============================================
+-- Assign pool IDs to top crisis regions so donations/payouts work
+-- =============================================
+UPDATE crisis_nodes SET pool_id = 1, pool_address = '0xAdFceAa9C932c665C4B4196A8e0Ee5DDCd9E8Cf9'
+  WHERE region_id = 'SDN-DARFUR-2024' AND pool_id IS NULL;
+UPDATE crisis_nodes SET pool_id = 2, pool_address = '0xAdFceAa9C932c665C4B4196A8e0Ee5DDCd9E8Cf9'
+  WHERE region_id = 'HTI-PORT-2024' AND pool_id IS NULL;
+UPDATE crisis_nodes SET pool_id = 3, pool_address = '0xAdFceAa9C932c665C4B4196A8e0Ee5DDCd9E8Cf9'
+  WHERE region_id = 'SYR-NW-2024' AND pool_id IS NULL;
+
+-- =============================================
+-- Test NGO for hackathon demo
+-- Use any MetaMask wallet address you control. Replace the address below
+-- with your test wallet. The NGO is pre-approved so it can submit receipts
+-- and request reimbursement immediately.
+-- =============================================
+INSERT INTO ngos (wallet_address, org_name, country, reg_number, operated_regions, contact_email, status, approved_at)
+VALUES (
+  '0x0000000000000000000000000000000000000001',
+  'Test Relief Foundation',
+  'Sudan',
+  'TEST-NGO-001',
+  ARRAY['SDN-DARFUR-2024', 'HTI-PORT-2024'],
+  'test@relieffoundation.org',
+  'approved',
+  NOW()
+) ON CONFLICT (wallet_address) DO NOTHING;

@@ -1,10 +1,11 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowUpRight, CheckCircle2, CircleDollarSign, CircleDot, Clock, Loader2, Plus, ThumbsUp } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { formatUnits } from "viem";
 import { useAccount, useChainId, useReadContract, useSwitchChain } from "wagmi";
 
@@ -12,7 +13,7 @@ import { Web3Provider } from "@/providers/Web3Provider";
 import { CHAIN_ID, EXPLORER_BASE_URL, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
 import { humanityTestnet } from "@/lib/humanity";
 import { erc20Abi } from "@/lib/wallet-contracts";
-import { getNgoQueue, getPoolLedger, getPoolStats, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
+import { getNgoQueue, getPoolLedger, getPoolStats, approveReceipt, requestReimbursement, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
 import { poolIdFromRegionId, shortenAddress } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth } from "@/hooks/useWallet";
@@ -20,7 +21,7 @@ import { NgoHeader } from "@/components/ngo/NgoHeader";
 
 type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
 
-const COL = "3.5rem 4rem 1fr 8.5rem 8rem 2.5rem";
+const COL = "3.5rem 4rem 1fr 8.5rem 8rem 6rem 2.5rem";
 
 const subLabel: React.CSSProperties = {
   fontSize: "var(--fs-xs)",
@@ -74,7 +75,10 @@ function NgoDashboardInner() {
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const { token, login, loading: authLoading, isAuthenticated } = useNgoAuth();
+  const queryClient = useQueryClient();
   const [authError, setAuthError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<{ id: string; message: string; type: "success" | "error" } | null>(null);
 
   const { data: regions = [], isLoading: regionsLoading, error: regionsError } = useCrisisRegions();
 
@@ -170,20 +174,24 @@ function NgoDashboardInner() {
         const ui = mapReceiptStatus(r.status);
         return {
           id: r.id.slice(0, 8),
+          fullId: r.id,
           date: new Date(r.submitted_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
           desc: r.item_notes || "Receipt request",
           usdc: Number(r.requested_amount),
           status: ui,
+          rawStatus: r.status,
           tx: r.payout_tx_hash,
         };
       });
     }
     return onChainPayouts.map((r) => ({
       id: r.id,
+      fullId: null as string | null,
       date: r.date,
       desc: r.desc,
       usdc: r.usdc,
       status: r.status,
+      rawStatus: "paid" as const,
       tx: r.tx,
     }));
   }, [isAuthenticated, queue, onChainPayouts]);
@@ -246,159 +254,217 @@ function NgoDashboardInner() {
     }
   }
 
+  const onApproveReceipt = useCallback(async (receiptId: string) => {
+    if (!token) return;
+    setActionLoading(receiptId);
+    setActionResult(null);
+    try {
+      await approveReceipt(receiptId, token);
+      setActionResult({ id: receiptId, message: "Receipt approved", type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["ngoQueue"] });
+    } catch (e) {
+      setActionResult({ id: receiptId, message: e instanceof Error ? e.message : "Approve failed", type: "error" });
+    } finally {
+      setActionLoading(null);
+    }
+  }, [token, queryClient]);
+
+  const onReimburse = useCallback(async (receiptId: string) => {
+    if (!token) return;
+    setActionLoading(receiptId);
+    setActionResult(null);
+    try {
+      const result = await requestReimbursement(receiptId, token);
+      setActionResult({ id: receiptId, message: `Paid — tx: ${result.txHash?.slice(0, 10)}…`, type: "success" });
+      queryClient.invalidateQueries({ queryKey: ["ngoQueue"] });
+    } catch (e) {
+      setActionResult({ id: receiptId, message: e instanceof Error ? e.message : "Reimbursement failed", type: "error" });
+    } finally {
+      setActionLoading(null);
+    }
+  }, [token, queryClient]);
+
   const walletLabel = isConnected && address ? shortenAddress(address) : "Not connected";
   const balanceLabel =
     USDC_ADDRESS && isConnected && address
       ? `${Number(formatUnits(usdcBalance, USDC_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
       : null;
 
-  const headerRight = (
-    <>
-      {!isConfigured && (
-        <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
-      )}
-      {isWrongNetwork && (
-        <button
-          type="button"
-          className="ngo-cta"
-          style={{
-            padding: "6px 12px",
-            borderRadius: 5,
-            backgroundColor: "var(--pending)",
-            color: "#111",
-            fontSize: "var(--fs-xs)",
-            fontWeight: 600,
-            border: "none",
-            cursor: "pointer",
-          }}
-          onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
-        >
-          Switch network
-        </button>
-      )}
-      <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
-      {isConnected && !isAuthenticated ? (
-        <button
-          type="button"
-          className="ngo-cta"
-          style={{
-            padding: "7px 12px",
-            borderRadius: 5,
-            backgroundColor: "var(--bg)",
-            color: "var(--text-mid)",
-            fontSize: "var(--fs-ui)",
-            fontWeight: 600,
-            border: "1px solid var(--border)",
-            cursor: authLoading ? "wait" : "pointer",
-          }}
-          disabled={authLoading}
-          onClick={() => onSignIn()}
-        >
-          {authLoading ? "Signing…" : "Sign in"}
-        </button>
-      ) : null}
-      <Link href="/ngo/submit">
-        <button
-          type="button"
-          className="ngo-cta"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "7px 15px",
-            borderRadius: 5,
-            backgroundColor: "var(--accent)",
-            color: "var(--accent-fg)",
-            fontSize: "var(--fs-ui)",
-            fontWeight: 600,
-            letterSpacing: "0.005em",
-            border: "none",
-            cursor: "pointer",
-            transition: "background-color 0.12s",
-          }}
-        >
-          <Plus style={{ width: 13, height: 13 }} />
-          Submit Receipt
-        </button>
-      </Link>
-    </>
-  );
-
   return (
     <div>
-      <NgoHeader rightSlot={headerRight} />
-
-      {authError ? (
-        <p style={{ maxWidth: 1160, margin: "0 auto", padding: "8px 32px", fontSize: "var(--fs-xs)", color: "var(--open)", backgroundColor: "var(--open-bg)", borderBottom: "1px solid var(--open-border)" }}>
-          {authError}
-        </p>
-      ) : null}
-
-      {/* ── Hero strip ─────────────────────────────────────────────── */}
-      <div
+      <header
         className="fu fu-1"
         style={{
-          backgroundColor: "var(--hero-bg)",
-          borderBottom: "1px solid var(--hero-border)",
+          position: "sticky",
+          top: 0,
+          zIndex: 40,
+          backgroundColor: "var(--surface)",
+          borderBottom: "1px solid var(--border-faint)",
         }}
       >
         <div
           style={{
             maxWidth: 1160,
             margin: "0 auto",
-            padding: "20px 32px",
+            padding: "0 32px",
+            minHeight: 54,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 16,
             flexWrap: "wrap",
+            paddingTop: 10,
+            paddingBottom: 10,
           }}
         >
-          <div>
-            <p style={{ fontSize: "var(--fs-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-vlo)", marginBottom: 4 }}>
-              NGO Wallet
-            </p>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12 }}>
               <span
                 style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  backgroundColor: isConnected ? "var(--fulfilled)" : "var(--text-vlo)",
-                  flexShrink: 0,
-                }}
-              />
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--fs-body)", color: "var(--text-hi)", fontWeight: 500 }}>
-                {walletLabel}
-              </span>
-              {isAuthenticated && (
-                <span style={{ fontSize: "var(--fs-xs)", padding: "2px 7px", borderRadius: 4, backgroundColor: "var(--fulfilled-bg)", color: "var(--fulfilled)", outline: "1px solid var(--fulfilled-border)", outlineOffset: -1, fontWeight: 600, letterSpacing: "0.04em" }}>
-                  Verified
-                </span>
-              )}
-            </div>
-          </div>
-          {balanceLabel && (
-            <div style={{ textAlign: "right" }}>
-              <p style={{ fontSize: "var(--fs-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-vlo)", marginBottom: 4 }}>
-                USDC Balance
-              </p>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "var(--fs-hero)",
-                  fontWeight: 500,
+                  fontSize: "var(--fs-brand)",
+                  fontWeight: 600,
                   color: "var(--text-hi)",
-                  fontVariantNumeric: "tabular-nums lining-nums",
-                  lineHeight: 1,
+                  letterSpacing: "-0.01em",
                 }}
               >
-                {balanceLabel}
+                CrisisChain
               </span>
+              <span style={{ color: "var(--border-mid)", fontSize: "var(--fs-sm)", userSelect: "none" }}>/</span>
+              <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>NGO Portal</span>
             </div>
-          )}
+
+            <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
+
+            <nav style={{ display: "flex", gap: 2 }}>
+              {NAV.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`ngo-nav-link${pathname === href ? " ngo-nav-link-active" : ""}`}
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {!isConfigured && (
+              <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
+            )}
+            {isWrongNetwork && (
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 5,
+                  backgroundColor: "var(--pending)",
+                  color: "#111",
+                  fontSize: "var(--fs-xs)",
+                  fontWeight: 600,
+                  border: "none",
+                  cursor: "pointer",
+                }}
+                onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
+              >
+                Switch network
+              </button>
+            )}
+            <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+            {isConnected && !isAuthenticated ? (
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 5,
+                  backgroundColor: "var(--bg)",
+                  color: "var(--text-mid)",
+                  fontSize: "var(--fs-ui)",
+                  fontWeight: 600,
+                  border: "1px solid var(--border)",
+                  cursor: authLoading ? "wait" : "pointer",
+                }}
+                disabled={authLoading}
+                onClick={() => onSignIn()}
+              >
+                {authLoading ? "Signing…" : "Sign in"}
+              </button>
+            ) : null}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: 2,
+                padding: "5px 11px",
+                borderRadius: 5,
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--bg)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--fs-sm)",
+                color: "var(--text-mid)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    backgroundColor: isConnected ? "var(--fulfilled)" : "var(--text-vlo)",
+                    flexShrink: 0,
+                  }}
+                />
+                {walletLabel}
+              </div>
+              {balanceLabel ? (
+                <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>{balanceLabel}</span>
+              ) : null}
+            </div>
+
+            <Link href="/ngo/submit">
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 15px",
+                  borderRadius: 5,
+                  backgroundColor: "var(--accent)",
+                  color: "var(--accent-fg)",
+                  fontSize: "var(--fs-ui)",
+                  fontWeight: 600,
+                  letterSpacing: "0.005em",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "background-color 0.12s",
+                }}
+              >
+                <Plus style={{ width: 13, height: 13 }} />
+                Submit Receipt
+              </button>
+            </Link>
+          </div>
         </div>
-      </div>
+        {authError ? (
+          <p style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px", fontSize: "var(--fs-xs)", color: "var(--open)" }}>
+            {authError}
+          </p>
+        ) : null}
+        {actionResult ? (
+          <p style={{
+            maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px",
+            fontSize: "var(--fs-xs)",
+            color: actionResult.type === "success" ? "var(--fulfilled)" : "var(--open)",
+          }}>
+            {actionResult.message}
+          </p>
+        ) : null}
+      </header>
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "36px 32px 96px" }}>
         {/* ── Region Overview ─────────────────────────────────────── */}
@@ -588,6 +654,7 @@ function NgoDashboardInner() {
                   <span>Item</span>
                   <span style={{ textAlign: "right" }}>Amount</span>
                   <span style={{ textAlign: "center" }}>Status</span>
+                  <span style={{ textAlign: "center" }}>Action</span>
                   <span />
                 </div>
 
@@ -644,6 +711,45 @@ function NgoDashboardInner() {
                         <StatusIcon status={tx.status} />
                         {chipLabel(tx.status)}
                       </span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                      {tx.fullId && tx.rawStatus === "pending" ? (
+                        <button
+                          type="button"
+                          disabled={actionLoading === tx.fullId}
+                          onClick={() => onApproveReceipt(tx.fullId!)}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "4px 10px", borderRadius: 4, border: "1px solid var(--fulfilled-border)",
+                            backgroundColor: "var(--fulfilled-bg)", color: "var(--fulfilled)",
+                            fontSize: "var(--fs-xs)", fontWeight: 600, cursor: actionLoading === tx.fullId ? "wait" : "pointer",
+                          }}
+                        >
+                          {actionLoading === tx.fullId
+                            ? <Loader2 style={{ width: 11, height: 11, animation: "spin 1s linear infinite" }} />
+                            : <ThumbsUp style={{ width: 11, height: 11 }} />}
+                          Approve
+                        </button>
+                      ) : tx.fullId && tx.rawStatus === "approved" ? (
+                        <button
+                          type="button"
+                          disabled={actionLoading === tx.fullId}
+                          onClick={() => onReimburse(tx.fullId!)}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border, var(--border))",
+                            backgroundColor: "var(--accent-lo)", color: "var(--accent-text)",
+                            fontSize: "var(--fs-xs)", fontWeight: 600, cursor: actionLoading === tx.fullId ? "wait" : "pointer",
+                          }}
+                        >
+                          {actionLoading === tx.fullId
+                            ? <Loader2 style={{ width: 11, height: 11, animation: "spin 1s linear infinite" }} />
+                            : <CircleDollarSign style={{ width: 11, height: 11 }} />}
+                          Reimburse
+                        </button>
+                      ) : (
+                        <span style={{ color: "var(--text-vlo)", fontSize: "var(--fs-xs)" }}>—</span>
+                      )}
                     </div>
                     <div style={{ display: "flex", justifyContent: "center" }}>
                       {tx.tx ? (
