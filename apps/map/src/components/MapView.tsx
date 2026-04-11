@@ -6,7 +6,11 @@ import type { Region } from '../types/region';
 
 const regions: Region[] = seedRegions as Region[];
 
-export default function MapView() {
+type MapViewProps = {
+  onRegionSelect: (region: Region) => void;
+};
+
+export default function MapView({ onRegionSelect }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
 
@@ -78,10 +82,15 @@ export default function MapView() {
         },
       });
 
-      // Click handler — log feature properties
+      // Click handler — find the matching Region and pass it up
       map.on('click', 'crisis-points', (e) => {
         if (e.features && e.features.length > 0) {
-          console.log(e.features[0].properties);
+          const props = e.features[0].properties;
+          if (!props) return;
+          const matched = regions.find((r) => r.region_id === props.region_id);
+          if (matched) {
+            onRegionSelect(matched);
+          }
         }
       });
 
