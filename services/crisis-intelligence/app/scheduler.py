@@ -1,26 +1,26 @@
 """
-APScheduler cron job — runs the crisis data pipeline every 6 hours.
-
-TODO:
-1. Call ACLED, HDX, ReliefWeb clients
-2. Normalize into CrisisNode list via normalizer.py
-3. Upsert into crisis_nodes table (ON CONFLICT region_id DO UPDATE)
-4. For each new or updated node above severity threshold, POST to
-   blockchain-bridge /deploy-pool to trigger contract deployment
-5. POST to ai-summary /batch-summarize with updated region IDs
+APScheduler cron — runs the full crisis intelligence + NGO discovery pipeline
+every 6 hours. Also available as a one-shot via POST /regions/refresh.
 """
 
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.services.region_pipeline import run_full_pipeline
 
+log = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
 @scheduler.scheduled_job("interval", hours=6, id="crisis_refresh")
 async def run_crisis_pipeline():
-    # TODO: import and call pipeline steps
-    print("[scheduler] Running crisis intelligence pipeline...")
+    log.info("[scheduler] Triggering crisis intelligence pipeline")
+    try:
+        results = await run_full_pipeline()
+        log.info(f"[scheduler] Pipeline complete: {results}")
+    except Exception as exc:
+        log.error(f"[scheduler] Pipeline error: {exc}", exc_info=True)
 
 
 def start_scheduler():
     scheduler.start()
-    print("[scheduler] Started — crisis pipeline runs every 6 hours")
+    log.info("[scheduler] Started — crisis pipeline runs every 6 hours")
