@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CrisisChain Web App
 
-## Getting Started
+Primary frontend for CrisisChain with:
 
-First, run the development server:
+- public crisis map and donation surfaces
+- NGO portal routes
+- donor wallet flows wired to Humanity testnet
+
+## Donor wallet routes
+
+- `/donate/[regionId]` -> primary donor flow with region-scoped pool
+- `/donor/wallet` -> advanced transaction console (manual pool controls)
+
+The standalone `apps/wallet` app is still kept as a fallback demo.
+
+## Environment setup
+
+Copy `.env.example` to `.env.local` and fill your deployed addresses:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Required keys:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_CHAIN_ID=7080969`
+- `NEXT_PUBLIC_RPC_URL`
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+- `NEXT_PUBLIC_USDC_ADDRESS`
+- `NEXT_PUBLIC_VAULT_ADDRESS`
+- `NEXT_PUBLIC_EXPLORER_BASE_URL`
+- `NEXT_PUBLIC_INDEXER_URL` (default `http://localhost:3001`)
+- `NEXT_PUBLIC_API_GATEWAY_URL` (default `http://localhost:4000`)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Startup order for full donor demo
 
-## Learn More
+From monorepo root:
 
-To learn more about Next.js, take a look at the following resources:
+1. Start Postgres
+2. Start Rust indexer
+3. Start this web app
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker compose up -d postgres
+source "$HOME/.cargo/env"
+HTTP_BIND_ADDR=0.0.0.0:3001 cargo run -p indexer
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+In a second terminal:
 
-## Deploy on Vercel
+```bash
+cd apps/web
+npm install
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Open [http://localhost:3000](http://localhost:3000)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Donor demo runbook
+
+1. Visit `/donate/88` (or a real region route in app navigation).
+2. Connect wallet and confirm network is Humanity testnet.
+3. Run `Approve` -> `Donate` -> `Payout`.
+4. Verify each hash in explorer from session history.
+5. Click `Refresh` in Pool Analytics and verify net math updates.
+
+## Notes
+
+- Token math uses 6 decimals (`mUSDC` raw units).
+- Native `tHP` is used for gas only.

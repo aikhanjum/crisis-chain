@@ -2,8 +2,14 @@
 export const VAULT_ADDRESS = (process.env.NEXT_PUBLIC_VAULT_ADDRESS ?? "") as `0x${string}`;
 export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "") as `0x${string}`;
 
-// Chain config (Arbitrum Sepolia = 421614)
-export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 421614);
+// Chain config (Humanity testnet)
+export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 7080969);
+export const RPC_URL =
+  process.env.NEXT_PUBLIC_RPC_URL ?? "https://humanity-testnet.g.alchemy.com/public";
+export const EXPLORER_BASE_URL =
+  process.env.NEXT_PUBLIC_EXPLORER_BASE_URL ?? "https://explorer.testnet.humanity.org";
+export const WALLETCONNECT_PROJECT_ID =
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "wallet-demo";
 
 // API base URLs
 export const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL ?? "http://localhost:4000";

@@ -43,6 +43,13 @@ export type NgoQueueItem = {
   items: { name: string; quantity: number; unitPrice: number; approved: boolean }[];
 };
 
+export type PoolStats = {
+  pool_id: string;
+  total_donated_raw: string;
+  total_paid_out_raw: string;
+  net_raw: string;
+};
+
 // --- Regions ---
 
 export async function getRegions(): Promise<CrisisRegion[]> {
@@ -59,8 +66,8 @@ export async function getRegion(id: string): Promise<CrisisRegion> {
 
 // --- Pool ledger (from Rust indexer) ---
 
-export async function getPoolStats(poolId: string) {
-  const res = await fetch(`${INDEXER_URL}/pools/${poolId}`);
+export async function getPoolStats(poolId: string): Promise<PoolStats> {
+  const res = await fetch(`${INDEXER_URL}/pools/${poolId}`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch pool stats");
   return res.json();
 }
