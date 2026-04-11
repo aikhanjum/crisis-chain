@@ -43,9 +43,23 @@
   --pool-in-bg:        oklch(95% 0.03  155);
 
   /* ── IPC food security severity (non-red scale) ─────────────────── */
-  --ipc-5:       oklch(38% 0.13 305);   /* deep plum  — Famine    */
-  --ipc-5-bg:    oklch(97% 0.03 305);
-  --ipc-5-border:oklch(83% 0.06 305);
+  --ipc-5:        oklch(38% 0.13 305);   /* deep plum  — Famine    */
+  --ipc-5-bg:     oklch(97% 0.03 305);
+  --ipc-5-border: oklch(83% 0.06 305);
+  --ipc-4:        oklch(47% 0.14 55);    /* amber       — Emergency */
+  --ipc-4-bg:     oklch(97% 0.04 55);
+  --ipc-4-border: oklch(86% 0.07 55);
+  --ipc-3:        oklch(44% 0.10 100);   /* olive       — Crisis    */
+  --ipc-3-bg:     oklch(97% 0.03 100);
+  --ipc-3-border: oklch(87% 0.06 100);
+
+  /* ── Hero section ───────────────────────────────────────────────── */
+  --hero-bg:     oklch(96.5% 0.012 60);
+  --hero-border: oklch(89%   0.018 60);
+
+  /* ── Card elevation ─────────────────────────────────────────────── */
+  --shadow-card:       0 1px 3px oklch(0% 0 0 / 0.06), 0 1px 2px oklch(0% 0 0 / 0.04);
+  --shadow-card-hover: 0 4px 12px oklch(0% 0 0 / 0.08);
 
   /* ── Status — darkened for light-mode text legibility ──────────── */
   --open:              oklch(50%  0.15  48);
@@ -83,6 +97,14 @@
   grid-template-columns: 1fr 320px;
   gap: 40px;
   align-items: start;
+}
+
+/* ── Card with elevation ─────────────────────────────────────────────── */
+.ngo-card {
+  background: var(--surface);
+  border: 1px solid var(--border-faint);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
 }
 
 /* ── Status chips ───────────────────────────────────────────────────── */
@@ -156,3 +178,64 @@
   50%       { opacity: 0.4; transform: scale(0.78); }
 }
 .ping { animation: ping 2.2s ease-in-out infinite; }
+
+/* ── Step progress indicators ───────────────────────────────────────── */
+.ngo-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 28px;
+}
+.ngo-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-vlo);
+}
+.ngo-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  background: var(--border-faint);
+  color: var(--text-vlo);
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.ngo-step-active .ngo-step-num {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.ngo-step-active {
+  color: var(--text-hi);
+}
+.ngo-step-done .ngo-step-num {
+  background: var(--fulfilled-bg);
+  color: var(--fulfilled);
+  outline: 1px solid var(--fulfilled-border);
+  outline-offset: -1px;
+}
+.ngo-step-done {
+  color: var(--text-lo);
+}
+.ngo-step-connector {
+  flex: 1;
+  height: 1px;
+  background: var(--border-faint);
+  margin: 0 10px;
+  min-width: 20px;
+}
+
+/* ── Form field divider ─────────────────────────────────────────────── */
+.ngo-field-divider {
+  border: none;
+  border-top: 1px solid var(--border-faint);
+  margin: 4px 0;
+}
