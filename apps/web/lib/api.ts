@@ -179,3 +179,13 @@ export async function submitReceipt(formData: FormData, token: string) {
   if (!res.ok) throw new Error("Failed to submit receipt");
   return res.json();
 }
+
+export async function markReceiptPaid(receiptId: string, txHash: string, token: string) {
+  const res = await fetch(`${API_GATEWAY_URL}/ngo/receipt/${receiptId}/pay`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ txHash }),
+  });
+  if (!res.ok) throw new Error("Failed to update receipt");
+  return res.json();
+}

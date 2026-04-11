@@ -67,6 +67,30 @@ router.post("/receipt", requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /ngo/receipt/:id/pay — mark receipt as paid after on-chain payout
+ * Body: { txHash: string }
+ */
+router.post("/receipt/:id/pay", requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { txHash } = req.body ?? {};
+  if (!txHash) return res.status(400).json({ error: "txHash is required" });
+
+  try {
+    const result = await query(
+      `UPDATE receipt_requests
+       SET status = 'paid', payout_tx_hash = $1, processed_at = NOW()
+       WHERE id = $2
+       RETURNING id, status, payout_tx_hash`,
+      [txHash, id],
+    );
+    if (!result.length) return res.status(404).json({ error: "Receipt not found" });
+    res.json(result[0]);
+  } catch (err) {
+    res.status(500).json({ error: "DB error", detail: String(err) });
+  }
+});
+
+/**
  * POST /ngo/register — submit NGO registration application
  */
 router.post("/register", async (req, res) => {

@@ -5,15 +5,15 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
-import { formatUnits } from "viem";
-import { useAccount, useChainId, useReadContract, useSwitchChain } from "wagmi";
+import { useCallback, useMemo, useState, useEffect } from "react";
+import { formatUnits, parseUnits } from "viem";
+import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
 
 import { Web3Provider } from "@/providers/Web3Provider";
 import { API_GATEWAY_URL, CHAIN_ID, EXPLORER_BASE_URL, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
 import { humanityTestnet } from "@/lib/humanity";
-import { erc20Abi } from "@/lib/wallet-contracts";
-import { getNgoQueue, getPoolLedger, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
+import { erc20Abi, vaultAbi, toBytes32 } from "@/lib/wallet-contracts";
+import { getNgoQueue, getPoolLedger, markReceiptPaid, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
 import { poolIdFromRegionId, shortenAddress } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
@@ -25,7 +25,7 @@ const NAV = [
 
 type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
 
-const COL = "3.5rem 4rem 1fr 8.5rem 8rem 2.5rem";
+const COL = "3.5rem 4rem 1fr 8.5rem 8rem 5.5rem 2.5rem";
 
 const subLabel: React.CSSProperties = {
   fontSize: "var(--fs-xs)",
@@ -79,6 +79,8 @@ function NgoDashboardInner() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
   const walletAuth = useNgoAuth();
   const emailAuth = useEmailAuth();
   const token = walletAuth.token ?? emailAuth.token;
@@ -88,6 +90,9 @@ function NgoDashboardInner() {
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [paySuccess, setPaySuccess] = useState<string | null>(null);
 
   const { data: allRegions = [], isLoading: regionsLoading, error: regionsError } = useCrisisRegions();
   const [operatedRegions, setOperatedRegions] = useState<string[] | null>(null);
@@ -149,6 +154,38 @@ function NgoDashboardInner() {
   });
 
   const isConfigured = Boolean(USDC_ADDRESS && VAULT_ADDRESS);
+
+  const onPay = useCallback(async (receipt: NgoReceiptRequest) => {
+    if (!publicClient || !VAULT_ADDRESS || !token) return;
+    setPayError(null);
+    setPaySuccess(null);
+    setPayingId(receipt.id);
+    try {
+      if (!isConnected) throw new Error("Connect wallet first");
+      if (chainId !== CHAIN_ID) {
+        await switchChainAsync({ chainId: humanityTestnet.id });
+      }
+
+      const poolId = poolIdFromRegionId(receipt.region_id);
+      const amountBase = parseUnits(String(receipt.requested_amount), USDC_DECIMALS);
+      const payoutRef = toBytes32(receipt.id.slice(0, 31));
+
+      const hash = await writeContractAsync({
+        address: VAULT_ADDRESS,
+        abi: vaultAbi,
+        functionName: "payout",
+        args: [BigInt(poolId), receipt.ngo_wallet as `0x${string}`, amountBase, payoutRef],
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      await markReceiptPaid(receipt.id, hash, token);
+      setPaySuccess(`Paid! tx: ${hash.slice(0, 10)}…`);
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : "Payout failed");
+    } finally {
+      setPayingId(null);
+    }
+  }, [publicClient, writeContractAsync, isConnected, chainId, switchChainAsync, token]);
   const isWrongNetwork = isConnected && chainId !== CHAIN_ID;
 
   const onChainPayouts = useMemo(() => {
@@ -200,6 +237,7 @@ function NgoDashboardInner() {
           usdc: Number(r.requested_amount),
           status: ui,
           tx: r.payout_tx_hash,
+          rawReceipt: r,
         };
       });
     }
@@ -210,6 +248,7 @@ function NgoDashboardInner() {
       usdc: r.usdc,
       status: r.status,
       tx: r.tx,
+      rawReceipt: null as NgoReceiptRequest | null,
     }));
   }, [isAuthenticated, queue, onChainPayouts]);
 
@@ -697,6 +736,7 @@ function NgoDashboardInner() {
                   <span>Item</span>
                   <span style={{ textAlign: "right" }}>Amount</span>
                   <span style={{ textAlign: "center" }}>Status</span>
+                  <span style={{ textAlign: "center" }}>Action</span>
                   <span />
                 </div>
 
@@ -755,6 +795,30 @@ function NgoDashboardInner() {
                       </span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "center" }}>
+                      {tx.rawReceipt && tx.rawReceipt.status === "pending" ? (
+                        <button
+                          disabled={payingId === tx.rawReceipt.id || !isConnected}
+                          onClick={() => tx.rawReceipt && onPay(tx.rawReceipt)}
+                          style={{
+                            padding: "4px 12px",
+                            fontSize: "var(--fs-xs)",
+                            fontWeight: 600,
+                            borderRadius: 5,
+                            border: "none",
+                            cursor: payingId ? "not-allowed" : "pointer",
+                            backgroundColor: "var(--accent)",
+                            color: "#000",
+                          }}
+                        >
+                          {payingId === tx.rawReceipt.id ? "Paying…" : "Pay"}
+                        </button>
+                      ) : (
+                        <span style={{ color: "var(--text-vlo)", fontSize: "var(--fs-xs)" }}>
+                          {tx.rawReceipt?.status === "paid" ? "Paid" : "—"}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "center" }}>
                       {tx.tx ? (
                         <a
                           href={`${EXPLORER_BASE_URL.replace(/\/$/, "")}/tx/${tx.tx}`}
@@ -772,6 +836,13 @@ function NgoDashboardInner() {
                   </div>
                 ))}
               </div>
+            )}
+
+            {payError && (
+              <p style={{ marginTop: 8, fontSize: "var(--fs-xs)", color: "#f87171" }}>{payError}</p>
+            )}
+            {paySuccess && (
+              <p style={{ marginTop: 8, fontSize: "var(--fs-xs)", color: "#4ade80" }}>{paySuccess}</p>
             )}
 
             <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
