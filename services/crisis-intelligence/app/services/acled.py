@@ -12,6 +12,7 @@ expiry (with skew) or after a 401 using refresh_token when available.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, date, timedelta, timezone
@@ -20,6 +21,8 @@ from typing import Any
 import httpx
 
 from app import db
+
+log = logging.getLogger(__name__)
 
 ACLED_ORIGIN = "https://acleddata.com"
 ACLED_OAUTH_PATH = "/oauth/token"
@@ -37,6 +40,29 @@ EVENT_WEIGHTS: dict[str, float] = {
     "Protests": 0.2,
     "Strategic developments": 0.3,
 }
+
+
+def _query_end_date() -> date:
+    """
+    Inclusive end date for ACLED API BETWEEN filter and for scoring from acled_events.
+
+    If the host clock is ahead of ACLED's published coverage (e.g. system date in 2026+ while
+    the API has no events yet for that range), a plain "last 30 days from today" returns zero rows.
+
+    Override with ACLED_QUERY_END_DATE=YYYY-MM-DD, or raise the cap year via ACLED_DATA_CAP_YEAR
+    (default 2026) so the effective end is min(today, YYYY-12-31).
+    """
+    raw = os.environ.get("ACLED_QUERY_END_DATE", "").strip()
+    if raw:
+        return date.fromisoformat(raw)
+    today = date.today()
+    cap_year = int(os.environ.get("ACLED_DATA_CAP_YEAR", "2026"))
+    cap_end = date(cap_year, 12, 31)
+    return min(today, cap_end)
+
+
+def _query_start_date(days_back: int) -> date:
+    return _query_end_date() - timedelta(days=days_back)
 
 
 @dataclass
@@ -65,6 +91,24 @@ class _OAuthSession:
 
 _oauth_lock = asyncio.Lock()
 _session = _OAuthSession()
+
+
+def _filter_rows_by_date_window(
+    rows: list[dict[str, Any]], start: date, end: date
+) -> list[dict[str, Any]]:
+    """Keep only rows whose event_date falls in [start, end] (API may ignore filters)."""
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        ed = r.get("event_date")
+        if not ed or not isinstance(ed, str):
+            continue
+        try:
+            d = datetime.strptime(ed[:10], "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if start <= d <= end:
+            out.append(r)
+    return out
 
 
 def _parse_read_body(body: Any) -> list[dict[str, Any]]:
@@ -147,16 +191,22 @@ async def fetch_and_cache(days_back: int = 30) -> list[dict[str, Any]]:
     """
     Pull recent events from ACLED and upsert into acled_events cache table.
     Returns raw rows.
+
+    ACLED's /read endpoint returns the first N rows of a year when using BETWEEN on event_date,
+    not the rows in that date range. We request one HTTP call per calendar day with
+    event_date = that day (equality), which matches the API behavior we verified.
     """
-    since = (date.today() - timedelta(days=days_back)).isoformat()
-    params: dict[str, str | int] = {
-        "_format": "json",
-        "limit": 5000,
-        "event_date": since,
-        "event_date_where": "BETWEEN",
-        "event_date2": date.today().isoformat(),
-        "fields": "event_id_cnty|event_date|event_type|country|iso3|latitude|longitude|fatalities|notes",
-    }
+    end = _query_end_date()
+    start = _query_start_date(days_back)
+    fetch_limit = int(os.environ.get("ACLED_FETCH_LIMIT", "5000"))
+    max_days = int(os.environ.get("ACLED_MAX_FETCH_DAYS", "31"))
+    span_days = (end - start).days + 1
+    if span_days > max_days:
+        start = end - timedelta(days=max_days - 1)
+
+    fields = "event_id_cnty|event_date|event_type|country|iso3|latitude|longitude|fatalities|notes"
+    seen_ids: set[str] = set()
+    rows: list[dict[str, Any]] = []
 
     async with httpx.AsyncClient(
         base_url=ACLED_ORIGIN,
@@ -167,20 +217,47 @@ async def fetch_and_cache(days_back: int = 30) -> list[dict[str, Any]]:
         token = await _ensure_oauth_tokens(client, after_401=False)
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = await client.get(ACLED_READ_PATH, params=params, headers=headers)
-
-        if response.status_code == 401 and not os.environ.get("ACLED_ACCESS_TOKEN", "").strip():
-            token = await _ensure_oauth_tokens(client, after_401=True)
-            headers = {"Authorization": f"Bearer {token}"}
+        d = start
+        while d <= end:
+            params: dict[str, str | int] = {
+                "_format": "json",
+                "limit": fetch_limit,
+                "year": d.year,
+                "event_date": d.isoformat(),
+                "fields": fields,
+            }
             response = await client.get(ACLED_READ_PATH, params=params, headers=headers)
 
-        response.raise_for_status()
-        body = response.json()
-        if isinstance(body, dict) and "status" in body and body["status"] != 200:
-            raise RuntimeError(
-                f"ACLED API error: status={body.get('status')} message={body.get('message', body)}"
-            )
-        rows = _parse_read_body(body)
+            if response.status_code == 401 and not os.environ.get("ACLED_ACCESS_TOKEN", "").strip():
+                token = await _ensure_oauth_tokens(client, after_401=True)
+                headers = {"Authorization": f"Bearer {token}"}
+                response = await client.get(ACLED_READ_PATH, params=params, headers=headers)
+
+            response.raise_for_status()
+            body = response.json()
+            if isinstance(body, dict) and "status" in body and body["status"] != 200:
+                raise RuntimeError(
+                    f"ACLED API error: status={body.get('status')} message={body.get('message', body)}"
+                )
+            for r in _parse_read_body(body):
+                eid = r.get("event_id_cnty")
+                if not eid or eid in seen_ids:
+                    continue
+                seen_ids.add(eid)
+                rows.append(r)
+
+            d += timedelta(days=1)
+
+    rows = _filter_rows_by_date_window(rows, start, end)
+
+    if not rows:
+        log.warning(
+            "[acled] No events for window %s–%s. ACLED may not publish this range yet; "
+            "set ACLED_QUERY_END_DATE or ACLED_DATA_CAP_YEAR to a year the API returns "
+            "(check myACLED access / data lag).",
+            start,
+            end,
+        )
 
     if rows:
         await db.executemany(
@@ -230,14 +307,16 @@ async def score_by_country(days_back: int = 30) -> dict[str, dict[str, Any]]:
     NORMALIZATION = 200 is tuned so that ~100 fatalities + 50 events ≈ 100 score.
     Adjust based on observed data distribution.
     """
-    since = date.today() - timedelta(days=days_back)
+    end = _query_end_date()
+    since = _query_start_date(days_back)
     rows = await db.fetch(
         """
         SELECT country, iso3, lat, lng, fatalities, event_type
         FROM acled_events
-        WHERE event_date >= $1
+        WHERE event_date >= $1 AND event_date <= $2
         """,
         since,
+        end,
     )
 
     by_country: dict[str, dict[str, Any]] = {}
