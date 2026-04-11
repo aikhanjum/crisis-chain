@@ -11,6 +11,8 @@ import {YieldVault} from "src/YieldVault.sol";
 import {MerkleDistributor} from "src/MerkleDistributor.sol";
 import {EIP712Reimbursement} from "src/EIP712Reimbursement.sol";
 import {SoulboundCredential} from "src/SoulboundCredential.sol";
+import {ApprovedItemsRegistry} from "src/ApprovedItemsRegistry.sol";
+import {ProofOfDelivery} from "src/ProofOfDelivery.sol";
 
 /// @title DeployAll
 /// @notice Deploys the full CrisisChain contract suite and wires permissions.
@@ -55,11 +57,34 @@ contract DeployAll is Script {
         SoulboundCredential credential = new SoulboundCredential(admin);
         console2.log("SoulboundCredential:", address(credential));
 
+        // 6. ApprovedItemsRegistry
+        ApprovedItemsRegistry registry = new ApprovedItemsRegistry(admin);
+        console2.log("ApprovedItemsRegistry:", address(registry));
+
+        // 7. ProofOfDelivery
+        ProofOfDelivery proofOfDelivery = new ProofOfDelivery(admin, address(vault), address(credential));
+        console2.log("ProofOfDelivery:", address(proofOfDelivery));
+
         // ── Permission wiring ─────────────────────────────────────────────
-        // EIP712Reimbursement needs PAYOUT_ROLE on the vault so it can
-        // execute payouts on behalf of signed approvals.
         vault.grantRole(vault.PAYOUT_ROLE(), address(reimbursement));
-        console2.log("Granted PAYOUT_ROLE to EIP712Reimbursement");
+        vault.grantRole(vault.PAYOUT_ROLE(), address(proofOfDelivery));
+        console2.log("Granted PAYOUT_ROLE to EIP712Reimbursement + ProofOfDelivery");
+
+        // The deployer key (bridge service) gets ORACLE_ROLE so it can
+        // auto-attest receipt/geo signals without human intervention.
+        proofOfDelivery.grantRole(proofOfDelivery.ORACLE_ROLE(), admin);
+        console2.log("Granted ORACLE_ROLE to deployer (bridge service)");
+
+        // Seed registry with common crisis relief items
+        registry.addItem(bytes32("rice"), 50_000_000);
+        registry.addItem(bytes32("water_filter"), 200_000_000);
+        registry.addItem(bytes32("medical_kit"), 500_000_000);
+        registry.addItem(bytes32("blankets"), 30_000_000);
+        registry.addItem(bytes32("tarpaulin"), 80_000_000);
+        registry.addItem(bytes32("cooking_fuel"), 25_000_000);
+        registry.addItem(bytes32("hygiene_kit"), 40_000_000);
+        registry.addItem(bytes32("mosquito_net"), 15_000_000);
+        console2.log("Seeded ApprovedItemsRegistry with 8 items");
 
         vm.stopBroadcast();
 

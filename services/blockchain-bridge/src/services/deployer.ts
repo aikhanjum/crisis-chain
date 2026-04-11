@@ -13,8 +13,7 @@
  *   4. Return { poolId, contractAddress }
  */
 
-import { createWalletClient, createPublicClient, http } from "viem";
-import { arbitrumSepolia } from "viem/chains";
+import { createWalletClient, createPublicClient, http, defineChain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { queryOne, execute } from "../lib/db";
 import { VAULT_ADDRESS } from "../lib/contracts";
@@ -22,13 +21,26 @@ import { VAULT_ADDRESS } from "../lib/contracts";
 const RPC_URL = process.env.RPC_URL ?? "";
 const PRIVATE_KEY = (process.env.PRIVATE_KEY ?? "0x0") as `0x${string}`;
 
+const humanityTestnet = defineChain({
+  id: 7080969,
+  name: "Humanity Testnet",
+  nativeCurrency: { name: "tHP", symbol: "tHP", decimals: 18 },
+  rpcUrls: {
+    default: { http: [RPC_URL || "https://humanity-testnet.g.alchemy.com/public"] },
+  },
+  blockExplorers: {
+    default: { name: "Explorer", url: "https://explorer.testnet.humanity.org" },
+  },
+  testnet: true,
+});
+
 export const publicClient = createPublicClient({
-  chain: arbitrumSepolia,
+  chain: humanityTestnet,
   transport: http(RPC_URL),
 });
 
 export const walletClient = createWalletClient({
-  chain: arbitrumSepolia,
+  chain: humanityTestnet,
   transport: http(RPC_URL),
   account: privateKeyToAccount(PRIVATE_KEY),
 });
