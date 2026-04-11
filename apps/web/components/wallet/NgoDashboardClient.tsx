@@ -317,8 +317,7 @@ function NgoDashboardInner() {
         {!isAuthenticated && (
           <div style={{ padding: "48px 24px", textAlign: "center", border: "1px solid var(--border-faint)", borderRadius: 10, backgroundColor: "var(--surface)" }}>
             <p style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-hi)", marginBottom: 8 }}>Sign in to access the NGO dashboard</p>
-            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Connect your wallet and sign in from the <Link href="/ngo/register" style={{ color: "var(--accent-text)", textDecoration: "none" }}>Profile</Link> page.</p>
-            <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>Demo: test@crisischain.org / demo1234</p>
+            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Connect your wallet and click &ldquo;Sign in&rdquo; in the header to authenticate.</p>
           </div>
         )}
         {isAuthenticated && (

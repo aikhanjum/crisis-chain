@@ -10,6 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-in-production";
 import regionsRouter from "./routes/regions";
 import ngoRouter from "./routes/ngo";
 import poolRouter from "./routes/pool";
+import receiptPipelineRouter from "./routes/receipt-pipeline";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -61,6 +62,7 @@ app.post("/auth/verify", async (req, res) => {
 app.use("/regions", regionsRouter);
 app.use("/ngo", ngoRouter);
 app.use("/pool", poolRouter);
+app.use("/receipt", receiptPipelineRouter);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

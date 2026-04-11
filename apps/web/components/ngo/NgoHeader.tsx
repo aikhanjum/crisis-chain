@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NgoWalletButton } from "@/components/ngo/NgoWalletButton";
 
 const NAV = [
   { href: "/ngo/dashboard", label: "Dashboard" },
-  { href: "/ngo/submit",    label: "Request"   },
+  { href: "/ngo/submit",    label: "Submit Receipt" },
   { href: "/ngo/register",  label: "Profile"   },
 ] as const;
 
@@ -73,14 +74,9 @@ export function NgoHeader() {
           ))}
         </nav>
 
-        <Link
-          href="/map"
-          className="ngo-nav-link"
-          style={{ marginLeft: "auto", opacity: 0.6 }}
-        >
-          ← Map
-        </Link>
-
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <NgoWalletButton showSignIn />
+        </div>
       </div>
     </header>
   );

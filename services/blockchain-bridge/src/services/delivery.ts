@@ -68,7 +68,7 @@ export async function submitDeliveryClaim(params: DeliverySubmission): Promise<D
   // Extract claimId from the ClaimSubmitted event
   // event ClaimSubmitted(uint256 indexed claimId, address indexed ngo, uint256 poolId, uint256 amount)
   const claimSubmittedTopic = keccak256(
-    encodePacked(["string"], ["ClaimSubmitted(uint256,address,uint256,uint256)"])
+    new TextEncoder().encode("ClaimSubmitted(uint256,address,uint256,uint256)")
   );
   const claimLog = submitReceipt.logs.find(
     (log) => log.topics[0] === claimSubmittedTopic
