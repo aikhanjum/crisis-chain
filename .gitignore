@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+
+# Rust
+target/
+Cargo.lock
+
+# SQLx cache
+.sqlx/
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/broadcast/
