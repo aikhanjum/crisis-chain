@@ -1,146 +1,190 @@
-# CrisisChain — Outstanding Tasks
-
-Ordered roughly by priority for the hackathon demo. Items marked **[DEMO CRITICAL]**
-must be done before presenting. Items marked **[POST-DEMO]** can be deferred.
+# CrisisChain — Tasks & Demo Path
 
 ---
 
-## Smart Contracts
+## ✅ Completed
 
-- [ ] **[DEMO CRITICAL]** Deploy `MockUSDC` + `CrisisPoolVault` to Arbitrum Sepolia
-  - `forge script contracts/script/DeployMockUSDC.s.sol --broadcast --rpc-url $RPC_URL`
-  - `forge script contracts/script/Deploy.s.sol --broadcast --rpc-url $RPC_URL`
-  - Fill `VAULT_ADDRESS`, `USDC_ADDRESS`, `START_BLOCK` in `.env`
+### Smart Contracts
+- [x] `CrisisPoolVault.sol` — single vault with poolId mapping, AccessControl, donate/payout
+- [x] Distribution rules: 48hr cooldown per NGO per pool (Rule 2), 10% minimum reserve (Rule 3)
+- [x] Admin bypass for both rules (`DEFAULT_ADMIN_ROLE`)
+- [x] `MockUSDC.sol` — mintable test ERC-20
 
-- [ ] **[DEMO CRITICAL]** Mint test USDC to demo donor wallet
-  - `cast send $USDC_ADDRESS "mint(address,uint256)" $DONOR_ADDR 10000000000 --rpc-url $RPC_URL --private-key $PRIVATE_KEY`
+### Crisis Intelligence (`services/crisis-intelligence/`)
+- [x] ACLED API fetch + caching in `acled_events`, weighted conflict scoring
+- [x] HDX HAPI food insecurity + displacement scoring
+- [x] Region pipeline: normalize → upsert `crisis_nodes` → deploy pool → AI summary → NGO discovery
+- [x] APScheduler running pipeline every 6 hours inside FastAPI lifespan
+- [x] ReliefWeb org scraper → website email extraction → DNS MX fallback
+- [x] NGO invite email via Resend (HMAC-SHA256 signed token, 7-day TTL)
+- [x] `POST /ngos/register?token=...` — full token validation (one-time use, expiry, email check)
+- [x] `POST /ngos/invite/:id` — sends invite email, marks discovered_ngo as `invited`
 
-- [ ] **[POST-DEMO]** Write `ReimbursementQueue.sol`
-  - FIFO queue across NGOs, enforcing per-NGO monthly cap
-  - Wire to `CrisisPoolVault.payout()` so queue processes in order
+### Blockchain Bridge (`services/blockchain-bridge/`)
+- [x] `POST /pools/deploy` — assigns sequential pool_id to region (no new contract per region)
+- [x] `POST /pools/pin-receipt` — multipart upload to Pinata IPFS, returns CID
+- [x] `POST /ngos/approve` — `grantRole(PAYOUT_ROLE, wallet)` on-chain + DB update
+- [x] `POST /ngos/revoke` — `revokeRole(PAYOUT_ROLE, wallet)` on-chain + DB update
+- [x] `POST /reimbursement/submit` — `vault.payout()` on-chain, waits for confirm, marks receipt `paid`
+- [x] ABI loaded from Foundry `contracts/out/` volume mount
 
-- [ ] **[POST-DEMO]** Write `ApprovedItemsRegistry.sol`
-  - On-chain record of approved goods categories, multisig-updatable
-  - Sync with `approved_items` DB table
+### OCR Receipt (`services/ocr-receipt/`)
+- [x] `POST /receipt/parse` — OCR image → parse line items → classify against approved_items DB
+
+### API Gateway (`services/api-gateway/`)
+- [x] `GET /auth/nonce`, `POST /auth/verify` — nonce generation + JWT issuance
+- [x] `GET /regions` — returns all crisis_nodes
+- [x] `POST /ngo/register` — inserts NGO application
+- [x] `GET /ngo/queue` — returns receipt_requests for authenticated NGO wallet
+- [x] JWT `requireAuth` middleware
+
+### AI Summary (`services/ai-summary/`)
+- [x] Anthropic Claude integration for region descriptions
+
+### Database
+- [x] All migrations: `crisis_nodes`, `ngos`, `discovered_ngos`, `receipt_requests`, `approved_items`, `acled_events`
+- [x] Seed data: 9 crisis regions + 28 approved items
+
+### Frontend (`apps/web/`)
+- [x] Next.js 15 + Tailwind + wagmi v2 + RainbowKit scaffolded
+- [x] Page stubs: `/map`, `/donate/[regionId]`, `/pool/[regionId]/ledger`, `/ngo/register`, `/ngo/submit`, `/ngo/dashboard`
+- [x] docker-compose.yml with all services + volume mounts
 
 ---
 
-## Blockchain Bridge (`services/blockchain-bridge/`)
+## 🚨 Demo Critical Path (do in this order)
 
-- [ ] **[DEMO CRITICAL]** Implement `deployPool()` in `src/services/deployer.ts`
-  - Load compiled artifacts from `contracts/out/CrisisPoolVault.sol/CrisisPoolVault.json`
-  - Call `walletClient.deployContract({ abi, bytecode, args: [usdcAddress, adminAddress] })`
-  - After deploy, POST back to crisis-intelligence to write `pool_address` + `pool_id` to `crisis_nodes`
+### Step 1 — External Accounts Setup
+- [ ] **Arbitrum Sepolia RPC** — get a free endpoint from Alchemy or Infura, copy into `.env` as `RPC_URL`
+- [ ] **Deployer wallet** — create/fund a wallet on Arbitrum Sepolia (needs ETH for gas)
+  - Export private key → `.env` as `PRIVATE_KEY`
+  - Get Sepolia ETH from faucet: `faucet.triangleplatform.com` or `sepolia.arbiscan.io/faucet`
+- [ ] **Resend account** — sign up at resend.com, create API key → `.env` as `RESEND_API_KEY`
+  - Verify a sending domain or use their sandbox (`onboarding@resend.dev`) for demo
+- [ ] **Pinata account** — sign up at pinata.cloud, create API key pair → `.env` as `PINATA_API_KEY` / `PINATA_SECRET_KEY`
+- [ ] **ACLED API** — register at acleddata.com → `.env` as `ACLED_EMAIL` + `ACLED_API_KEY`
+- [ ] **Anthropic API key** → `.env` as `ANTHROPIC_API_KEY`
+- [ ] **WalletConnect Project ID** — create project at cloud.walletconnect.com → `.env` as `WALLETCONNECT_PROJECT_ID`
 
-- [ ] **[DEMO CRITICAL]** Implement `watchPool()` in `src/services/events.ts`
-  - `publicClient.watchContractEvent()` for `Donation` and `Payout` events
-  - Upsert into `donations` / `payouts` tables
-  - `NOTIFY` Postgres channel so WebSocket feed updates live
+### Step 2 — Deploy Contracts
+- [ ] **Compile contracts**
+  ```bash
+  cd contracts && forge build
+  ```
+- [ ] **Deploy MockUSDC**
+  ```bash
+  forge script contracts/script/DeployMockUSDC.s.sol --broadcast --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+  ```
+  Copy output address → `.env` as `USDC_ADDRESS`
 
-- [ ] **[DEMO CRITICAL]** Implement `POST /pools/pin-receipt`
-  - Add `multer` for multipart parsing
-  - Call `pinFile()` from `ipfs.ts` (already implemented)
-  - Return IPFS CID to OCR service
+- [ ] **Deploy CrisisPoolVault**
+  ```bash
+  forge script contracts/script/Deploy.s.sol --broadcast --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+  ```
+  Copy output address → `.env` as `VAULT_ADDRESS`
+  Copy deploy block number → `.env` as `START_BLOCK`
 
-- [ ] **[POST-DEMO]** Run `npm install` and verify TypeScript builds clean
-  - `cd services/blockchain-bridge && npm install && npm run build`
+- [ ] **Mint test USDC to donor wallet**
+  ```bash
+  cast send $USDC_ADDRESS "mint(address,uint256)" $DONOR_WALLET 10000000000 \
+    --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+  ```
+  (10,000 USDC — 6 decimals)
 
----
-
-## API Gateway (`services/api-gateway/`)
-
-- [ ] **[DEMO CRITICAL]** Fix `ledger` query — `donations` and `payouts` tables have no `created_at` column
-  - Either: `ALTER TABLE donations ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();`
-  - Or: remove the `created_at` reference in `src/routes/regions.ts` and use `block_number` for ordering
-
-- [ ] **[DEMO CRITICAL]** Complete EIP-191 signature verification in `src/middleware/auth.ts`
-  - Install `viem`: `npm install viem`
-  - Replace the commented TODO with:
+### Step 3 — Fix Broken Backend Code
+- [ ] **EIP-191 signature verification** in `services/api-gateway/src/middleware/auth.ts`
+  - Install viem: `cd services/api-gateway && npm install viem`
+  - Replace the `// TODO: verify signature` block:
     ```ts
     import { verifyMessage } from "viem";
-    const recovered = await verifyMessage({ address, message: nonce, signature });
-    if (recovered.toLowerCase() !== address.toLowerCase()) return null;
+    const valid = await verifyMessage({ address: address as `0x${string}`, message: nonce, signature: _signature as `0x${string}` });
+    if (!valid) return null;
     ```
 
-- [ ] **[DEMO CRITICAL]** Implement `POST /ngo/receipt` — proxy to OCR service
-  - Use `http-proxy-middleware` or stream the multipart body to `http://ocr-receipt:8003/receipt/parse`
-  - Forward the `Authorization` header so the OCR service knows which NGO submitted
+- [ ] **Fix ledger query** in `services/api-gateway/src/routes/regions.ts`
+  - `donations` and `payouts` tables have no `created_at` column
+  - Replace `ORDER BY created_at` with `ORDER BY block_number` (or remove `created_at` from SELECT)
 
-- [ ] **[POST-DEMO]** Wire Postgres `LISTEN/NOTIFY` to WebSocket in `src/index.ts`
-  - Subscribe to `donations_feed` channel on startup
-  - Broadcast new donation/payout events to all connected WebSocket clients
+- [ ] **Implement `POST /receipt/submit`** in `services/ocr-receipt/app/routes/receipt.py`
+  - Load parsed result from DB (or accept line items directly in request body)
+  - `POST http://blockchain-bridge:4001/pools/pin-receipt` with the receipt image → get IPFS CID
+  - Insert into `receipt_requests` table (status=`approved`, pool_id, ngo_wallet, amount)
+  - `POST http://blockchain-bridge:4001/reimbursement/submit` → triggers on-chain payout
+  - Return `{ receipt_id, status: "paid", tx_hash }`
 
-- [ ] **[POST-DEMO]** Run `npm install` and verify TypeScript builds clean
-  - `cd services/api-gateway && npm install && npm run build`
+- [ ] **Implement `POST /ngo/receipt` proxy** in `services/api-gateway/src/routes/ngo.ts`
+  - Pipe the multipart body from the browser directly to `http://ocr-receipt:8003/receipt/parse`
+  - Use `http-proxy-middleware` or `node-fetch` with form-data passthrough
+  - Forward the NGO wallet address from the JWT payload as a form field
 
----
+### Step 4 — Wire the Frontend
+- [ ] **CrisisMap component** (`apps/web/app/map/page.tsx`)
+  - Fetch `GET http://localhost:4000/regions` on load
+  - Render Leaflet markers at each region's lat/lng, colored by severity
+  - Click → navigate to `/donate/[regionId]`
 
-## OCR Receipt Service (`services/ocr-receipt/`)
-
-- [ ] **[DEMO CRITICAL]** Implement `POST /receipt/submit`
-  - Load the parsed receipt from DB (or pass receipt_id referencing a cached parse result)
-  - Call `POST blockchain-bridge/pools/pin-receipt` → get IPFS CID
-  - Insert into `receipt_requests` table
-  - Return `{ queue_position, receipt_id, status: "queued" }`
-
-- [ ] **[POST-DEMO]** Replace regex line-item parser with structured table extraction
-  - Current heuristic only handles simple `"Item   qty   $price"` format
-  - For production: use `pdfplumber` for PDFs, or Google Vision's `document_text_detection` for photos
-
----
-
-## Crisis Intelligence (`services/crisis-intelligence/`)
-
-- [ ] **[POST-DEMO]** NGO invite — JWT token validation on `POST /ngos/register`
-  - `_verify_invite_token()` is already implemented in `app/routes/ngos.py`
-  - Add a `token` query param to `POST /ngos/register`
-  - Decode token → verify `discovered_ngo_id` + expiry
-  - Use the token's `discovered_ngo_id` instead of email-matching to link records
-  - Return `403` if token is missing, expired, or tampered
-
-- [ ] **[POST-DEMO]** Admin bulk-invite endpoint
-  - `POST /ngos/invite-all/{region_id}` — sends invites to all `status = 'discovered'` NGOs with emails in a region
-  - Rate-limit to avoid Resend quota issues (e.g. 10/minute)
-
-- [ ] **[POST-DEMO]** INFORM Risk Index integration
-  - Currently `inform_score = 0.0` in `region_pipeline.py`
-  - Fetch from `https://drmkc.jrc.ec.europa.eu/inform-index` or use their static CSV
-  - Map ISO3 → INFORM score and pass into `build_crisis_node()`
-
-- [ ] **[POST-DEMO]** Verify HDX HAPI endpoint paths
-  - `/food/food-security` and `/coordination-context/refugees` paths may have changed
-  - Check against live API docs at `https://hapi.humdata.org/docs`
-
----
-
-## Frontend (`apps/web/`)
-
-- [ ] **[DEMO CRITICAL]** Wire `CrisisMap` to real data
-  - Replace placeholder div in `app/map/page.tsx` with `<CrisisMap>` component
-  - Fetch from `GET /regions` via `useCrisisRegions()` hook
-  - Seed data is already in DB — map should render immediately
-
-- [ ] **[DEMO CRITICAL]** Implement `DonateForm` component (`components/donate/DonateForm.tsx`)
+- [ ] **DonateForm component** (`apps/web/components/donate/DonateForm.tsx`)
   - `<ConnectButton />` from RainbowKit
-  - `useWriteContract` → `USDC.approve(vaultAddress, amount)` then `vault.donate(poolId, amount, memo)`
-  - Show tx hash + Arbiscan link on confirmation
+  - Input for amount (USDC)
+  - `useWriteContract` → `USDC.approve(VAULT_ADDRESS, amount)` then `vault.donate(poolId, amount, memo)`
+  - Show tx hash with link to `arbiscan.io/tx/...` on confirm
 
-- [ ] **[DEMO CRITICAL]** Implement ledger page data display (`app/pool/[regionId]/ledger/page.tsx`)
-  - Fetch from `GET /regions/:id/ledger`
-  - Merge donations + payouts into a single timeline sorted by block number
+- [ ] **Ledger page** (`apps/web/app/pool/[regionId]/ledger/page.tsx`)
+  - Fetch `GET /regions/:id/ledger` → merge donations + payouts
+  - Render as a timeline table: type | amount | wallet | tx hash | block
 
-- [ ] **[POST-DEMO]** NGO register page — read invite token from URL
-  - `const token = searchParams.get("token")`
-  - Decode token client-side (base64) to pre-fill org name
-  - Send token with `POST /ngos/register` once wallet auth is validated
+### Step 5 — Start Everything
+- [ ] **Create `.env` file** at repo root with all vars:
+  ```env
+  RPC_URL=https://arb-sepolia.g.alchemy.com/v2/<key>
+  PRIVATE_KEY=0x...
+  VAULT_ADDRESS=0x...
+  USDC_ADDRESS=0x...
+  START_BLOCK=...
+  ACLED_EMAIL=...
+  ACLED_API_KEY=...
+  ANTHROPIC_API_KEY=...
+  RESEND_API_KEY=...
+  PINATA_API_KEY=...
+  PINATA_SECRET_KEY=...
+  WALLETCONNECT_PROJECT_ID=...
+  FRONTEND_URL=http://localhost:3000
+  JWT_SECRET=some-random-secret
+  ```
 
-- [ ] **[POST-DEMO]** Add `<ConnectButton />` to map page nav
+- [ ] **Start all services**
+  ```bash
+  docker compose up --build
+  ```
+  Services start in order: postgres → crisis-intelligence, ai-summary, ocr-receipt, blockchain-bridge, api-gateway
+
+- [ ] **Trigger pipeline manually** (don't wait 6 hours)
+  ```bash
+  curl -X POST http://localhost:8001/regions/refresh
+  ```
+  This runs the full ACLED→HDX→pool deploy→AI summary→NGO scrape pipeline immediately.
+
+- [ ] **Verify seed data loaded**
+  ```bash
+  docker compose exec postgres psql -U postgres crisis_pool -c "SELECT region_id, severity_score FROM crisis_nodes LIMIT 5;"
+  ```
+
+- [ ] **Start frontend** (separate terminal — not in docker for dev)
+  ```bash
+  cd apps/web && npm run dev
+  ```
 
 ---
 
-## Infrastructure
+## 🟡 Post-Demo (defer these)
 
-- [ ] **[POST-DEMO]** Write `crates/indexer/Dockerfile` (referenced in `docker-compose.yml` but doesn't exist)
-- [ ] **[POST-DEMO]** Add `created_at` column to `donations` and `payouts` tables via migration `0004`
-- [ ] **[POST-DEMO]** Global `.env` — consolidate all service env vars so `docker compose up` works with one file
-- [ ] **[POST-DEMO]** Replace admin private key with Safe multisig before mainnet
+- [ ] NGO register page — read invite token from URL (`searchParams.get("token")`)
+- [ ] Rust indexer Dockerfile (`crates/indexer/Dockerfile`)
+- [ ] Postgres LISTEN/NOTIFY WebSocket feed in api-gateway
+- [ ] Replace admin private key with Safe multisig
+- [ ] INFORM Risk Index integration (currently hardcoded 0)
+- [ ] Verify HDX HAPI endpoint paths against live API docs
+- [ ] Bulk invite endpoint: `POST /ngos/invite-all/:region_id`
+- [ ] `ReimbursementQueue.sol` + `ApprovedItemsRegistry.sol`
+- [ ] Add `created_at` to donations/payouts via migration `0004`
+- [ ] nonce store in DB (currently in-memory map, resets on restart)

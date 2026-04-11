@@ -2,7 +2,8 @@ import os
 import hmac
 import hashlib
 import time
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import Optional
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from app import db
 from app.models.ngo import NgoDiscoveryResult
 from app.services.ngo_pipeline import discover_ngos_for_region
@@ -145,17 +146,26 @@ async def invite_ngo(discovered_ngo_id: str):
 
 
 @router.post("/register")
-async def register_ngo(body: dict):
+async def register_ngo(
+    body: dict,
+    token: Optional[str] = Query(None, description="Signed invite token from the registration email"),
+):
     """
     NGO self-registration endpoint.
     Called from the frontend /ngo/register page after wallet connect.
-    Links a wallet address to a previously discovered NGO record.
 
-    Required fields: wallet_address, org_name, country, operated_regions (list),
-                     contact_email, reg_number (optional)
+    Two paths:
+      - With ?token=...: token is verified, discovered_ngo record is looked up
+        directly and pre-validated. The token proves the submitter received the
+        invite email sent to the NGO's contact address.
+      - Without token: falls back to email-based matching (manual walk-in registrations).
+        Still accepted, but the discovered_ngo link may be absent.
 
-    On success: creates a row in `ngos` with status='pending'.
-    Admin must then approve via grantRole() on the smart contract.
+    Required body fields: wallet_address, org_name, country, operated_regions (list[str]),
+                          contact_email, reg_number (optional)
+
+    On success: inserts into `ngos` with status='pending'.
+    Admin approves by calling vault.grantRole(PAYOUT_ROLE, wallet) on the contract.
     """
     wallet = (body.get("wallet_address") or "").lower()
     org_name = body.get("org_name", "").strip()
@@ -164,9 +174,42 @@ async def register_ngo(body: dict):
     if not wallet or not org_name:
         raise HTTPException(status_code=400, detail="wallet_address and org_name required")
 
-    # Find matching discovered_ngo by email to link records
-    discovered_id = None
-    if contact_email:
+    # ── Token path ────────────────────────────────────────────────────────
+    discovered_id: Optional[str] = None
+    email_source = "manual"
+
+    if token:
+        ngo_id = _verify_invite_token(token)
+        if ngo_id is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Invite token is invalid or has expired. Request a new invite.",
+            )
+
+        # Load the discovered record the token was issued for
+        discovered_row = await db.fetchrow(
+            "SELECT id, contact_email, status FROM discovered_ngos WHERE id = $1",
+            ngo_id,
+        )
+        if not discovered_row:
+            raise HTTPException(status_code=404, detail="Invite record not found")
+        if discovered_row["status"] == "registered":
+            raise HTTPException(status_code=409, detail="This invite has already been used")
+
+        # If the submitter provided an email, it must match what was scraped —
+        # prevents one NGO from using another's invite link.
+        if contact_email and discovered_row["contact_email"]:
+            if contact_email != discovered_row["contact_email"].lower():
+                raise HTTPException(
+                    status_code=403,
+                    detail="Contact email does not match the invited address",
+                )
+
+        discovered_id = ngo_id
+        email_source = "invite"
+
+    # ── Fallback: email-based matching (no token) ─────────────────────────
+    elif contact_email:
         row = await db.fetchrow(
             "SELECT id FROM discovered_ngos WHERE contact_email = $1 LIMIT 1",
             contact_email,
@@ -174,6 +217,7 @@ async def register_ngo(body: dict):
         if row:
             discovered_id = row["id"]
 
+    # ── Insert into ngos ──────────────────────────────────────────────────
     try:
         await db.execute(
             """
@@ -182,9 +226,9 @@ async def register_ngo(body: dict):
                  contact_email, status, email_source, discovered_ngo_id)
             VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)
             ON CONFLICT (wallet_address) DO UPDATE SET
-                org_name         = EXCLUDED.org_name,
-                contact_email    = EXCLUDED.contact_email,
-                operated_regions = EXCLUDED.operated_regions,
+                org_name          = EXCLUDED.org_name,
+                contact_email     = EXCLUDED.contact_email,
+                operated_regions  = EXCLUDED.operated_regions,
                 discovered_ngo_id = EXCLUDED.discovered_ngo_id
             """,
             wallet,
@@ -193,13 +237,13 @@ async def register_ngo(body: dict):
             body.get("reg_number"),
             body.get("operated_regions", []),
             contact_email or None,
-            "manual",
+            email_source,
             discovered_id,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    # Mark discovered_ngo as registered
+    # Mark the discovered record as registered so the invite can't be reused
     if discovered_id:
         await db.execute(
             "UPDATE discovered_ngos SET status = 'registered', registered_at = NOW() WHERE id = $1",
@@ -209,5 +253,6 @@ async def register_ngo(body: dict):
     return {
         "status": "pending",
         "wallet_address": wallet,
+        "linked_from_invite": discovered_id is not None and email_source == "invite",
         "message": "Registration received. Your wallet will be whitelisted after admin review.",
     }

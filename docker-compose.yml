@@ -116,13 +116,17 @@ services:
     build: ./services/blockchain-bridge
     ports:
       - "4001:4001"
+    volumes:
+      - ./contracts/out:/contracts/out:ro   # compiled Foundry artifacts for ABI loading
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/crisis_pool
       RPC_URL: ${RPC_URL}
       PRIVATE_KEY: ${PRIVATE_KEY}
+      VAULT_ADDRESS: ${VAULT_ADDRESS}
       USDC_ADDRESS: ${USDC_ADDRESS}
       PINATA_API_KEY: ${PINATA_API_KEY}
       PINATA_SECRET_KEY: ${PINATA_SECRET_KEY}
+      CONTRACTS_OUT_DIR: /contracts/out
       PORT: 4001
     depends_on:
       postgres:
