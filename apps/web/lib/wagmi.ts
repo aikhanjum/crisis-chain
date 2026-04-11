@@ -1,9 +1,15 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
-import { arbitrumSepolia } from "wagmi/chains";
+import { http } from "viem";
+
+import { humanityTestnet } from "@/lib/humanity";
+import { RPC_URL, WALLETCONNECT_PROJECT_ID } from "@/lib/constants";
 
 export const wagmiConfig = getDefaultConfig({
   appName: "CrisisChain",
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "YOUR_PROJECT_ID",
-  chains: [arbitrumSepolia],
+  projectId: WALLETCONNECT_PROJECT_ID,
+  chains: [humanityTestnet],
+  transports: {
+    [humanityTestnet.id]: http(RPC_URL),
+  },
   ssr: true,
 });

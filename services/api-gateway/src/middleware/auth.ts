@@ -7,19 +7,17 @@
  *   3. POST /auth/verify { address, signature, nonce } → returns JWT
  *   4. Client sends JWT in Authorization: Bearer <token> header
  *
- * TODO:
- * - Store nonces in DB (with TTL) instead of in-memory map
- * - Verify signature using ethers.js verifyMessage()
- * - Check that address is in the `ngos` table (whitelisted)
+ * Prod improvements: store nonces in DB with TTL, check `ngos` table whitelist.
  */
 
 import { Request, Response, NextFunction } from "express";
+import { verifyMessage } from "viem";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-in-production";
 
-// Temporary in-memory nonce store — replace with DB
+// In-memory nonce store (prod: DB + TTL)
 const pendingNonces = new Map<string, string>();
 
 export function generateNonce(address: string): string {
@@ -28,16 +26,20 @@ export function generateNonce(address: string): string {
   return nonce;
 }
 
-export function verifyAndIssueToken(address: string, _signature: string, nonce: string): string | null {
-  const expected = pendingNonces.get(address.toLowerCase());
+export async function verifyAndIssueToken(address: string, signature: string, nonce: string): Promise<string | null> {
+  const addr = address.toLowerCase();
+  const expected = pendingNonces.get(addr);
   if (!expected || expected !== nonce) return null;
-  pendingNonces.delete(address.toLowerCase());
+  pendingNonces.delete(addr);
 
-  // TODO: verify `signature` is a valid EIP-191 signature from `address`
-  // const recovered = ethers.verifyMessage(nonce, signature);
-  // if (recovered.toLowerCase() !== address.toLowerCase()) return null;
+  const valid = await verifyMessage({
+    address: address as `0x${string}`,
+    message: nonce,
+    signature: signature as `0x${string}`,
+  });
+  if (!valid) return null;
 
-  return jwt.sign({ address: address.toLowerCase() }, JWT_SECRET, { expiresIn: "8h" });
+  return jwt.sign({ address: addr }, JWT_SECRET, { expiresIn: "8h" });
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
