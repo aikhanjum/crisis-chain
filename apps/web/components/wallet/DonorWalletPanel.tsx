@@ -23,6 +23,7 @@ import { erc20Abi, toBytes32, TxAction, vaultAbi } from "@/lib/wallet-contracts"
 import { poolIdFromRegionId } from "@/lib/wallet-utils";
 import { usePoolAnalytics } from "@/hooks/usePoolAnalytics";
 import { useTxHistory } from "@/hooks/useTxHistory";
+import { useCrisisRegion } from "@/hooks/useCrisisRegions";
 
 type DonorWalletPanelProps = {
   title: string;
@@ -52,6 +53,7 @@ function DonorWalletPanelInner({
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { data: regionData } = useCrisisRegion(regionId ?? "");
   const { data: poolStats, loading, error: poolError, refresh } = usePoolAnalytics(poolId);
 
   const isConfigured = Boolean(USDC_ADDRESS && VAULT_ADDRESS);
@@ -70,12 +72,12 @@ function DonorWalletPanelInner({
 
   useEffect(() => {
     if (regionId) {
-      const mapped = poolIdFromRegionId(regionId);
+      const mapped = regionData?.poolId ?? poolIdFromRegionId(regionId);
       setPoolId(mapped);
       setMemo(`donation-${mapped}`);
       setPayoutRef(`payout-${mapped}`);
     }
-  }, [regionId]);
+  }, [regionId, regionData]);
 
   async function ensureNetwork() {
     if (!isConnected) throw new Error("Connect wallet first.");

@@ -5,18 +5,18 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { formatUnits } from "viem";
 import { useAccount, useChainId, useReadContract, useSwitchChain } from "wagmi";
 
 import { Web3Provider } from "@/providers/Web3Provider";
-import { CHAIN_ID, EXPLORER_BASE_URL, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
+import { API_GATEWAY_URL, CHAIN_ID, EXPLORER_BASE_URL, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
 import { humanityTestnet } from "@/lib/humanity";
 import { erc20Abi } from "@/lib/wallet-contracts";
-import { getNgoQueue, getPoolLedger, getPoolStats, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
+import { getNgoQueue, getPoolLedger, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
 import { poolIdFromRegionId, shortenAddress } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
-import { useNgoAuth } from "@/hooks/useWallet";
+import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
 const NAV = [
   { href: "/ngo/dashboard", label: "Dashboard" },
   { href: "/ngo/submit", label: "Submit Receipt" },
@@ -79,10 +79,38 @@ function NgoDashboardInner() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
-  const { token, login, loading: authLoading, isAuthenticated } = useNgoAuth();
+  const walletAuth = useNgoAuth();
+  const emailAuth = useEmailAuth();
+  const token = walletAuth.token ?? emailAuth.token;
+  const isAuthenticated = walletAuth.isAuthenticated || emailAuth.isAuthenticated;
+  function logout() { walletAuth.logout(); emailAuth.logout(); }
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
 
-  const { data: regions = [], isLoading: regionsLoading, error: regionsError } = useCrisisRegions();
+  const { data: allRegions = [], isLoading: regionsLoading, error: regionsError } = useCrisisRegions();
+  const [operatedRegions, setOperatedRegions] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!token) { setOperatedRegions(null); return; }
+    fetch(`${API_GATEWAY_URL}/ngo/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((body: { operated_regions?: string[] }) => {
+        if (Array.isArray(body.operated_regions) && body.operated_regions.length > 0) {
+          setOperatedRegions(body.operated_regions);
+        } else {
+          setOperatedRegions(null);
+        }
+      })
+      .catch(() => setOperatedRegions(null));
+  }, [token]);
+
+  // Restrict to NGO's operated regions if available
+  const regions = useMemo(() => {
+    if (!operatedRegions) return allRegions;
+    return allRegions.filter((r) => operatedRegions.includes(r.id));
+  }, [allRegions, operatedRegions]);
 
   const primaryRegion = useMemo(() => {
     if (!regions.length) return null;
@@ -96,15 +124,6 @@ function NgoDashboardInner() {
     }
     return [...s].slice(0, 12);
   }, [regions]);
-
-  const poolStatsQueries = useQueries({
-    queries: poolKeys.map((poolId) => ({
-      queryKey: ["ngoPoolStats", poolId],
-      queryFn: () => getPoolStats(poolId),
-      staleTime: 30_000,
-      retry: 1,
-    })),
-  });
 
   const ledgerQueries = useQueries({
     queries: poolKeys.map((poolId) => ({
@@ -214,21 +233,21 @@ function NgoDashboardInner() {
 
   const poolCards = useMemo(() => {
     return poolKeys.map((key, i) => {
-      const stats = poolStatsQueries[i]?.data;
+      const ledger = ledgerQueries[i]?.data;
       const regionName =
         regions.find((r) => poolKeyForRegion(r) === key)?.name ?? `Pool ${key}`;
-      if (!stats) {
+      if (!ledger) {
         return {
           id: key,
           name: regionName,
           total: 0,
           committed: 0,
-          loading: poolStatsQueries[i]?.isLoading ?? true,
-          error: poolStatsQueries[i]?.error ? String(poolStatsQueries[i]?.error) : null,
+          loading: ledgerQueries[i]?.isLoading ?? true,
+          error: ledgerQueries[i]?.error ? String(ledgerQueries[i]?.error) : null,
         };
       }
-      const donated = BigInt(stats.total_donated_raw || "0");
-      const paid = BigInt(stats.total_paid_out_raw || "0");
+      const donated = BigInt(ledger.totalDonatedRaw || "0");
+      const paid = BigInt(ledger.totalPaidOutRaw || "0");
       return {
         id: key,
         name: regionName,
@@ -238,7 +257,7 @@ function NgoDashboardInner() {
         error: null as string | null,
       };
     });
-  }, [poolKeys, poolStatsQueries, regions]);
+  }, [poolKeys, ledgerQueries, regions]);
 
   const ipcHint = primaryRegion ? IPC_STYLE[primaryRegion.severityLevel] : null;
   const ipc = ipcHint ? IPC[ipcHint.key] : IPC[3];
@@ -246,9 +265,20 @@ function NgoDashboardInner() {
   async function onSignIn() {
     setAuthError(null);
     try {
-      await login();
+      await walletAuth.login();
     } catch (e) {
       setAuthError(e instanceof Error ? e.message : "Sign-in failed");
+    }
+  }
+
+  async function onEmailSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setAuthError(null);
+    try {
+      await emailAuth.login(emailInput, passwordInput);
+      setShowEmailForm(false);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Sign-in failed");
     }
   }
 
@@ -340,25 +370,28 @@ function NgoDashboardInner() {
               </button>
             )}
             <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
-            {isConnected && !isAuthenticated ? (
-              <button
-                type="button"
-                className="ngo-cta"
-                style={{
-                  padding: "7px 12px",
-                  borderRadius: 5,
-                  backgroundColor: "var(--bg)",
-                  color: "var(--text-mid)",
-                  fontSize: "var(--fs-ui)",
-                  fontWeight: 600,
-                  border: "1px solid var(--border)",
-                  cursor: authLoading ? "wait" : "pointer",
-                }}
-                disabled={authLoading}
-                onClick={() => onSignIn()}
-              >
-                {authLoading ? "Signing…" : "Sign in"}
-              </button>
+            {!isAuthenticated ? (
+              <>
+                {isConnected && (
+                  <button
+                    type="button"
+                    className="ngo-cta"
+                    style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: walletAuth.loading ? "wait" : "pointer" }}
+                    disabled={walletAuth.loading}
+                    onClick={() => onSignIn()}
+                  >
+                    {walletAuth.loading ? "Signing…" : "Sign in with wallet"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="ngo-cta"
+                  style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
+                  onClick={() => setShowEmailForm((v) => !v)}
+                >
+                  {showEmailForm ? "Cancel" : "Email sign in"}
+                </button>
+              </>
             ) : null}
             <div
               style={{
@@ -392,6 +425,16 @@ function NgoDashboardInner() {
               ) : null}
             </div>
 
+            {isAuthenticated && (
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{ padding: "7px 12px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-lo)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
+                onClick={logout}
+              >
+                Sign out
+              </button>
+            )}
             <Link href="/ngo/submit">
               <button
                 type="button"
@@ -418,6 +461,36 @@ function NgoDashboardInner() {
             </Link>
           </div>
         </div>
+        {showEmailForm && !isAuthenticated ? (
+          <form
+            onSubmit={onEmailSignIn}
+            style={{ maxWidth: 1160, margin: "0 auto", padding: "8px 32px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border-faint)" }}
+          >
+            <input
+              type="email"
+              required
+              placeholder="Email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              style={{ padding: "6px 10px", borderRadius: 5, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text-hi)", fontSize: "var(--fs-ui)", width: 200 }}
+            />
+            <input
+              type="password"
+              required
+              placeholder="Password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              style={{ padding: "6px 10px", borderRadius: 5, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text-hi)", fontSize: "var(--fs-ui)", width: 160 }}
+            />
+            <button
+              type="submit"
+              disabled={emailAuth.loading}
+              style={{ padding: "7px 14px", borderRadius: 5, backgroundColor: "var(--accent)", color: "var(--accent-fg)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "none", cursor: emailAuth.loading ? "wait" : "pointer" }}
+            >
+              {emailAuth.loading ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+        ) : null}
         {authError ? (
           <p style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px", fontSize: "var(--fs-xs)", color: "var(--open)" }}>
             {authError}
@@ -426,7 +499,14 @@ function NgoDashboardInner() {
       </header>
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "36px 32px 96px" }}>
-        <section className="fu fu-2" style={{ marginBottom: 40 }}>
+        {!isAuthenticated && (
+          <div style={{ padding: "48px 24px", textAlign: "center", border: "1px solid var(--border-faint)", borderRadius: 10, backgroundColor: "var(--surface)" }}>
+            <p style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-hi)", marginBottom: 8 }}>Sign in to access the NGO dashboard</p>
+            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Use your wallet or click "Email sign in" in the header.</p>
+            <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>Demo: test@crisischain.org / demo1234</p>
+          </div>
+        )}
+        {isAuthenticated && (<section className="fu fu-2" style={{ marginBottom: 40 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
             <p className="ngo-label" style={{ marginBottom: 0 }}>
               Region Overview
@@ -573,9 +653,8 @@ function NgoDashboardInner() {
               </div>
             </div>
           )}
-        </section>
-
-        <div className="ngo-grid">
+        </section>)}
+        {isAuthenticated && <div className="ngo-grid">
           <section className="fu fu-3">
             <p className="ngo-label">
               {isAuthenticated && queue.length > 0 ? "Your receipt requests" : "On-chain payouts to your wallet"}
@@ -864,8 +943,9 @@ function NgoDashboardInner() {
               )}
             </div>
           </aside>
-        </div>
+        </div>}
       </main>
+
     </div>
   );
 }

@@ -13,7 +13,7 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyMessage } from "viem";
 import jwt from "jsonwebtoken";
-import crypto from "crypto";
+import crypto, { scryptSync, timingSafeEqual } from "crypto";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-in-production";
 
@@ -40,6 +40,25 @@ export async function verifyAndIssueToken(address: string, signature: string, no
   if (!valid) return null;
 
   return jwt.sign({ address: addr }, JWT_SECRET, { expiresIn: "8h" });
+}
+
+/**
+ * Verify a plaintext password against a stored "salt:hash" string.
+ * Format: `<salt>:<hex-encoded 64-byte scrypt hash>`
+ */
+export function verifyPassword(password: string, stored: string): boolean {
+  const colonIdx = stored.indexOf(":");
+  if (colonIdx === -1) return false;
+  const salt = stored.slice(0, colonIdx);
+  const expectedHex = stored.slice(colonIdx + 1);
+  try {
+    const actual = scryptSync(password, salt, 64);
+    const expected = Buffer.from(expectedHex, "hex");
+    if (actual.length !== expected.length) return false;
+    return timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {

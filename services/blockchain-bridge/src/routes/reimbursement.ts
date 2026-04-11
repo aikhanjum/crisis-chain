@@ -24,11 +24,11 @@ router.post("/submit", async (req, res) => {
     poolId: number;
     ngoWallet: string;
     amountUsdc: string;
-    receiptCid: string;
+    receiptCid?: string;    // optional — IPFS CID if available, else receiptId is used as ref
   };
 
-  if (!receiptId || !poolId || !ngoWallet || !amountUsdc || !receiptCid) {
-    return res.status(400).json({ error: "receiptId, poolId, ngoWallet, amountUsdc, receiptCid required" });
+  if (!receiptId || !poolId || !ngoWallet || !amountUsdc) {
+    return res.status(400).json({ error: "receiptId, poolId, ngoWallet, amountUsdc required" });
   }
 
   // Guard: verify the receipt is in 'approved' state before paying

@@ -2,7 +2,11 @@ import express from "express";
 import cors from "cors";
 import { WebSocketServer } from "ws";
 import { createServer } from "http";
-import { generateNonce, verifyAndIssueToken } from "./middleware/auth";
+import jwt from "jsonwebtoken";
+import { generateNonce, verifyAndIssueToken, verifyPassword } from "./middleware/auth";
+import { query } from "./lib/db";
+
+const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-in-production";
 import regionsRouter from "./routes/regions";
 import ngoRouter from "./routes/ngo";
 import poolRouter from "./routes/pool";
@@ -18,6 +22,28 @@ app.get("/auth/nonce", (req, res) => {
   const address = req.query.address as string;
   if (!address) return res.status(400).json({ error: "address required" });
   res.json({ nonce: generateNonce(address) });
+});
+
+app.post("/auth/email-login", async (req, res) => {
+  const { email, password } = req.body ?? {};
+  if (!email || !password) return res.status(400).json({ error: "email and password required" });
+  try {
+    const rows = await query(
+      `SELECT wallet_address, status, password_hash FROM ngos WHERE contact_email = $1`,
+      [String(email).toLowerCase()],
+    );
+    if (!rows.length) return res.status(401).json({ error: "Invalid email or password" });
+    const ngo = rows[0] as { wallet_address: string; status: string; password_hash: string | null };
+    if (!ngo.password_hash) return res.status(401).json({ error: "Invalid email or password" });
+    if (ngo.status !== "approved") return res.status(403).json({ error: "NGO account not yet approved" });
+    if (!verifyPassword(String(password), ngo.password_hash)) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+    const token = jwt.sign({ address: ngo.wallet_address }, JWT_SECRET, { expiresIn: "8h" });
+    res.json({ token });
+  } catch (err) {
+    res.status(500).json({ error: "Login failed", detail: String(err) });
+  }
 });
 
 app.post("/auth/verify", async (req, res) => {

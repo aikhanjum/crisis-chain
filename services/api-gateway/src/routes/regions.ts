@@ -120,7 +120,13 @@ router.get("/:id", async (req, res) => {
  */
 router.get("/:id/ledger", async (req, res) => {
   try {
-    const poolId = req.params.id;
+    const regionKey = req.params.id;
+    // Resolve region_id slug → numeric pool_id stored in crisis_nodes
+    const nodeRows = await query(
+      `SELECT pool_id FROM crisis_nodes WHERE region_id = $1`,
+      [regionKey],
+    );
+    const poolId = nodeRows.length > 0 ? String(nodeRows[0].pool_id) : regionKey;
     const [donations, payouts] = await Promise.all([
       query(
         `SELECT tx_hash, block_number, donor AS actor, amount_raw AS amount, memo

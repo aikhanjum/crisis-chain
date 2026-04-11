@@ -138,3 +138,24 @@ INSERT INTO approved_items (keyword, category, notes) VALUES
   ('sanitary pad', 'hygiene_supplies', NULL),
   ('mask', 'hygiene_supplies', NULL)
 ON CONFLICT (keyword) DO NOTHING;
+
+-- =============================================
+-- Test NGO account (demo / local dev)
+-- Email: test@crisischain.org  Password: demo1234
+-- Wallet: 0x8Aa2CE61baDBC43b5C9fd13130514Add9205F884
+-- =============================================
+INSERT INTO ngos (wallet_address, org_name, country, operated_regions, contact_email, status, approved_at, password_hash)
+VALUES (
+  '0x8aa2ce61badbc43b5c9fd13130514add9205f884',
+  'CrisisChain Test NGO',
+  'Sudan',
+  '{SDN-DARFUR-2024}',
+  'test@crisischain.org',
+  'approved',
+  NOW(),
+  'crisischain2026salt:69efd3f3bb81d0e683425387c46bb6407dd4fcd6888b69eb15d8e8a0d1cc6c979356b1a06bbfb7598f9cf6b9eb1ed7d79746b4f4765cc5d7095968a783a53d2e'
+)
+ON CONFLICT (wallet_address) DO UPDATE
+  SET password_hash = EXCLUDED.password_hash,
+      status = 'approved',
+      approved_at = COALESCE(ngos.approved_at, NOW());

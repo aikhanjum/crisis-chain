@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { getPoolStats, PoolStats } from "@/lib/api";
+import { getPoolLedger, PoolStats } from "@/lib/api";
 
 export function usePoolAnalytics(poolId: string) {
   const [data, setData] = useState<PoolStats | null>(null);
@@ -13,8 +13,13 @@ export function usePoolAnalytics(poolId: string) {
     setLoading(true);
     setError(null);
     try {
-      const stats = await getPoolStats(poolId);
-      setData(stats);
+      const ledger = await getPoolLedger(poolId);
+      setData({
+        pool_id: ledger.poolId,
+        total_donated_raw: ledger.totalDonatedRaw,
+        total_paid_out_raw: ledger.totalPaidOutRaw,
+        net_raw: ledger.netRaw,
+      });
     } catch (err) {
       setData(null);
       setError(err instanceof Error ? err.message : "Failed to fetch pool analytics");

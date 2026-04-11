@@ -7,7 +7,8 @@ import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 
 import { Web3Provider } from "@/providers/Web3Provider";
 import { EXPLORER_BASE_URL } from "@/lib/constants";
-import { usePoolLedger, usePoolStats, formatUsdc } from "@/hooks/usePoolData";
+import { usePoolLedger, formatUsdc } from "@/hooks/usePoolData";
+import { useCrisisRegion } from "@/hooks/useCrisisRegions";
 import { poolIdFromRegionId, shortenAddress } from "@/lib/wallet-utils";
 
 type MergedRow = {
@@ -22,10 +23,16 @@ type MergedRow = {
 function LedgerInner() {
   const params = useParams<{ regionId: string }>();
   const regionId = params?.regionId ?? "";
-  const poolId = poolIdFromRegionId(regionId);
+  const { data: regionData } = useCrisisRegion(regionId);
+  const poolId = regionData?.poolId ?? poolIdFromRegionId(regionId);
 
   const { data: ledger, isLoading: ledgerLoading, error: ledgerError } = usePoolLedger(poolId);
-  const { data: stats, isLoading: statsLoading } = usePoolStats(poolId);
+  const statsLoading = ledgerLoading;
+  const stats = ledger ? {
+    total_donated_raw: ledger.totalDonatedRaw,
+    total_paid_out_raw: ledger.totalPaidOutRaw,
+    net_raw: ledger.netRaw,
+  } : null;
 
   const rows = useMemo<MergedRow[]>(() => {
     if (!ledger) return [];
