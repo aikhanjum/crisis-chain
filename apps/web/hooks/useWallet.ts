@@ -15,19 +15,22 @@ export function useNgoAuth() {
     if (!address) return;
     setLoading(true);
     try {
-      // 1. Get nonce from server
       const nonceRes = await fetch(`${API_GATEWAY_URL}/auth/nonce?address=${address}`);
+      if (!nonceRes.ok) throw new Error(`Nonce request failed (${nonceRes.status})`);
       const { nonce } = await nonceRes.json();
-      // 2. Sign nonce
+      if (!nonce) throw new Error("No nonce returned");
+
       const signature = await signMessageAsync({ message: nonce });
-      // 3. Exchange for token
+
       const authRes = await fetch(`${API_GATEWAY_URL}/auth/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address, signature, nonce }),
       });
-      const { token: jwt } = await authRes.json();
-      setToken(jwt);
+      const body = await authRes.json();
+      if (!authRes.ok) throw new Error(body?.error ?? `Verify failed (${authRes.status})`);
+      if (!body?.token) throw new Error("No token returned");
+      setToken(body.token as string);
     } finally {
       setLoading(false);
     }

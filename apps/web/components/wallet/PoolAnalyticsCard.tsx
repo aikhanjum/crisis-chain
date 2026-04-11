@@ -1,0 +1,60 @@
+import { formatUnits } from "viem";
+
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { PoolStats } from "@/lib/api";
+import { USDC_DECIMALS } from "@/lib/constants";
+
+type PoolAnalyticsCardProps = {
+  poolId: string;
+  loading: boolean;
+  error: string | null;
+  data: PoolStats | null;
+  onRefresh: () => Promise<void>;
+};
+
+export function PoolAnalyticsCard({
+  poolId,
+  loading,
+  error,
+  data,
+  onRefresh,
+}: PoolAnalyticsCardProps) {
+  return (
+    <Card className="rounded-2xl border-zinc-800/90 bg-zinc-900/85 p-5">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">Pool Analytics</CardTitle>
+        <Button variant="secondary" size="sm" onClick={() => onRefresh()} loading={loading}>
+          Refresh
+        </Button>
+      </CardHeader>
+
+      <p className="mb-3 text-xs uppercase tracking-wider text-zinc-500">Pool {poolId}</p>
+
+      {error ? (
+        <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
+          {error}
+        </p>
+      ) : null}
+
+      {!error && data ? (
+        <div className="space-y-2 text-sm text-zinc-300">
+          <p>
+            <span className="text-zinc-500">Donated raw:</span> {data.total_donated_raw}
+          </p>
+          <p>
+            <span className="text-zinc-500">Paid out raw:</span> {data.total_paid_out_raw}
+          </p>
+          <p>
+            <span className="text-zinc-500">Net raw:</span> {data.net_raw}
+          </p>
+          <p className="pt-2 text-cyan-300">
+            Net humanized: {formatUnits(BigInt(data.net_raw), USDC_DECIMALS)} mUSDC
+          </p>
+        </div>
+      ) : null}
+
+      {!error && !data ? <p className="text-sm text-zinc-500">No indexed data yet.</p> : null}
+    </Card>
+  );
+}
