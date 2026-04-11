@@ -1,0 +1,82 @@
+[
+  {
+    "region_id": "SDN-darfur",
+    "name": "Darfur, Sudan",
+    "country_code": "SDN",
+    "lat": 13.0,
+    "lng": 24.5,
+    "severity_score": 0.95,
+    "crisis_type": "conflict",
+    "summary": "Ongoing conflict between rival military factions has displaced millions and created severe humanitarian needs across the Darfur region."
+  },
+  {
+    "region_id": "PSE-gaza",
+    "name": "Gaza",
+    "country_code": "PSE",
+    "lat": 31.5,
+    "lng": 34.45,
+    "severity_score": 0.98,
+    "crisis_type": "conflict",
+    "summary": "Sustained military operations and blockade conditions have created acute shortages of food, water, medicine, and shelter for the civilian population."
+  },
+  {
+    "region_id": "UKR-donetsk",
+    "name": "Donetsk, Ukraine",
+    "country_code": "UKR",
+    "lat": 48.0,
+    "lng": 37.8,
+    "severity_score": 0.85,
+    "crisis_type": "conflict",
+    "summary": "Active frontline operations continue to displace residents and damage critical infrastructure across eastern Ukraine."
+  },
+  {
+    "region_id": "COD-northkivu",
+    "name": "North Kivu, DRC",
+    "country_code": "COD",
+    "lat": -1.5,
+    "lng": 29.0,
+    "severity_score": 0.82,
+    "crisis_type": "conflict",
+    "summary": "Armed group activity has driven mass displacement and disrupted access to food and medical care in eastern DRC."
+  },
+  {
+    "region_id": "MMR-rakhine",
+    "name": "Rakhine, Myanmar",
+    "country_code": "MMR",
+    "lat": 20.1,
+    "lng": 93.5,
+    "severity_score": 0.78,
+    "crisis_type": "displacement",
+    "summary": "Ongoing conflict and movement restrictions continue to severely impact Rohingya and other communities in Rakhine State."
+  },
+  {
+    "region_id": "HTI-portauprince",
+    "name": "Port-au-Prince, Haiti",
+    "country_code": "HTI",
+    "lat": 18.55,
+    "lng": -72.33,
+    "severity_score": 0.80,
+    "crisis_type": "conflict",
+    "summary": "Gang violence has displaced hundreds of thousands and severely restricted humanitarian access in the capital region."
+  },
+  {
+    "region_id": "YEM-national",
+    "name": "Yemen",
+    "country_code": "YEM",
+    "lat": 15.5,
+    "lng": 47.5,
+    "severity_score": 0.88,
+    "crisis_type": "famine",
+    "summary": "Years of conflict and economic collapse have left a majority of the population in need of humanitarian assistance, with food insecurity at crisis levels."
+  },
+  {
+    "region_id": "AFG-national",
+    "name": "Afghanistan",
+    "country_code": "AFG",
+    "lat": 33.9,
+    "lng": 67.7,
+    "severity_score": 0.75,
+    "crisis_type": "displacement",
+    "summary": "Drought, economic collapse, and large-scale returns from neighboring countries have created widespread humanitarian needs across the country."
+  }
+]
