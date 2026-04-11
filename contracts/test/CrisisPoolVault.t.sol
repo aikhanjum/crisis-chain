@@ -21,14 +21,18 @@ contract CrisisPoolVaultTest is Test {
     uint256 internal constant INITIAL_MINT = 1_000_000_000;
 
     function setUp() external {
+        vm.warp(1_000_000);
+
         usdc = new MockUSDC();
         vault = new CrisisPoolVault(admin, address(usdc));
 
         usdc.mint(donor, INITIAL_MINT);
 
-        // Give operator PAYOUT_ROLE so we can test rules without admin bypass
-        vm.prank(admin);
+        // Give operator PAYOUT_ROLE so we can test rules without admin bypass.
+        // Use startPrank so the nested vault.PAYOUT_ROLE() view call doesn't consume the prank.
+        vm.startPrank(admin);
         vault.grantRole(vault.PAYOUT_ROLE(), operator);
+        vm.stopPrank();
     }
 
     // ── Helper ───────────────────────────────────────────────────────────
@@ -99,12 +103,14 @@ contract CrisisPoolVaultTest is Test {
         vault.payout(POOL_ID, ngo, 100_000_000, bytes32("payout-a"));
 
         // Immediate second payout to the same ngo must revert with CooldownActive.
+        // Cache cooldownPeriod before prank so the view call doesn't consume it.
+        uint256 cooldown = vault.cooldownPeriod();
         vm.prank(operator);
         vm.expectRevert(
             abi.encodeWithSelector(
                 CrisisPoolVault.CooldownActive.selector,
                 ngo,
-                block.timestamp + vault.cooldownPeriod()
+                block.timestamp + cooldown
             )
         );
         vault.payout(POOL_ID, ngo, 100_000_000, bytes32("payout-b"));
