@@ -2,7 +2,6 @@
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ArrowUpRight, CheckCircle2, CircleDot, Clock, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -17,11 +16,7 @@ import { getNgoQueue, getPoolLedger, getPoolStats, type CrisisRegion, type NgoRe
 import { poolIdFromRegionId, shortenAddress } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth } from "@/hooks/useWallet";
-const NAV = [
-  { href: "/ngo/dashboard", label: "Dashboard" },
-  { href: "/ngo/submit", label: "Submit Receipt" },
-  { href: "/ngo/register", label: "Register" },
-] as const;
+import { NgoHeader } from "@/components/ngo/NgoHeader";
 
 type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
 
@@ -45,8 +40,8 @@ const IPC_STYLE = {
 
 const IPC = {
   5: { color: "var(--ipc-5)", bg: "var(--ipc-5-bg)", border: "var(--ipc-5-border)" },
-  4: { color: "var(--open)", bg: "var(--open-bg)", border: "var(--open-border)" },
-  3: { color: "var(--pending)", bg: "var(--pending-bg)", border: "var(--pending-border)" },
+  4: { color: "var(--ipc-4)", bg: "var(--ipc-4-bg)", border: "var(--ipc-4-border)" },
+  3: { color: "var(--ipc-3)", bg: "var(--ipc-3-bg)", border: "var(--ipc-3-border)" },
 } as const;
 
 function StatusIcon({ status, className }: { status: UiStatus; className?: string }) {
@@ -75,7 +70,6 @@ function poolKeyForRegion(r: CrisisRegion): string {
 }
 
 function NgoDashboardInner() {
-  const pathname = usePathname();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
@@ -258,174 +252,156 @@ function NgoDashboardInner() {
       ? `${Number(formatUnits(usdcBalance, USDC_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`
       : null;
 
+  const headerRight = (
+    <>
+      {!isConfigured && (
+        <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
+      )}
+      {isWrongNetwork && (
+        <button
+          type="button"
+          className="ngo-cta"
+          style={{
+            padding: "6px 12px",
+            borderRadius: 5,
+            backgroundColor: "var(--pending)",
+            color: "#111",
+            fontSize: "var(--fs-xs)",
+            fontWeight: 600,
+            border: "none",
+            cursor: "pointer",
+          }}
+          onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
+        >
+          Switch network
+        </button>
+      )}
+      <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
+      {isConnected && !isAuthenticated ? (
+        <button
+          type="button"
+          className="ngo-cta"
+          style={{
+            padding: "7px 12px",
+            borderRadius: 5,
+            backgroundColor: "var(--bg)",
+            color: "var(--text-mid)",
+            fontSize: "var(--fs-ui)",
+            fontWeight: 600,
+            border: "1px solid var(--border)",
+            cursor: authLoading ? "wait" : "pointer",
+          }}
+          disabled={authLoading}
+          onClick={() => onSignIn()}
+        >
+          {authLoading ? "Signing…" : "Sign in"}
+        </button>
+      ) : null}
+      <Link href="/ngo/submit">
+        <button
+          type="button"
+          className="ngo-cta"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "7px 15px",
+            borderRadius: 5,
+            backgroundColor: "var(--accent)",
+            color: "var(--accent-fg)",
+            fontSize: "var(--fs-ui)",
+            fontWeight: 600,
+            letterSpacing: "0.005em",
+            border: "none",
+            cursor: "pointer",
+            transition: "background-color 0.12s",
+          }}
+        >
+          <Plus style={{ width: 13, height: 13 }} />
+          Submit Receipt
+        </button>
+      </Link>
+    </>
+  );
+
   return (
     <div>
-      <header
+      <NgoHeader rightSlot={headerRight} />
+
+      {authError ? (
+        <p style={{ maxWidth: 1160, margin: "0 auto", padding: "8px 32px", fontSize: "var(--fs-xs)", color: "var(--open)", backgroundColor: "var(--open-bg)", borderBottom: "1px solid var(--open-border)" }}>
+          {authError}
+        </p>
+      ) : null}
+
+      {/* ── Hero strip ─────────────────────────────────────────────── */}
+      <div
         className="fu fu-1"
         style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 40,
-          backgroundColor: "var(--surface)",
-          borderBottom: "1px solid var(--border-faint)",
+          backgroundColor: "var(--hero-bg)",
+          borderBottom: "1px solid var(--hero-border)",
         }}
       >
         <div
           style={{
             maxWidth: 1160,
             margin: "0 auto",
-            padding: "0 32px",
-            minHeight: 54,
+            padding: "20px 32px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 16,
             flexWrap: "wrap",
-            paddingTop: 10,
-            paddingBottom: 10,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 12 }}>
+          <div>
+            <p style={{ fontSize: "var(--fs-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-vlo)", marginBottom: 4 }}>
+              NGO Wallet
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span
                 style={{
-                  fontSize: "var(--fs-brand)",
-                  fontWeight: 600,
-                  color: "var(--text-hi)",
-                  letterSpacing: "-0.01em",
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: isConnected ? "var(--fulfilled)" : "var(--text-vlo)",
+                  flexShrink: 0,
                 }}
-              >
-                CrisisChain
-              </span>
-              <span style={{ color: "var(--border-mid)", fontSize: "var(--fs-sm)", userSelect: "none" }}>/</span>
-              <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>NGO Portal</span>
-            </div>
-
-            <div style={{ width: 1, height: 18, backgroundColor: "var(--border)", flexShrink: 0 }} />
-
-            <nav style={{ display: "flex", gap: 2 }}>
-              {NAV.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`ngo-nav-link${pathname === href ? " ngo-nav-link-active" : ""}`}
-                >
-                  {label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {!isConfigured && (
-              <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
-            )}
-            {isWrongNetwork && (
-              <button
-                type="button"
-                className="ngo-cta"
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 5,
-                  backgroundColor: "var(--pending)",
-                  color: "#111",
-                  fontSize: "var(--fs-xs)",
-                  fontWeight: 600,
-                  border: "none",
-                  cursor: "pointer",
-                }}
-                onClick={() => switchChainAsync({ chainId: humanityTestnet.id })}
-              >
-                Switch network
-              </button>
-            )}
-            <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
-            {isConnected && !isAuthenticated ? (
-              <button
-                type="button"
-                className="ngo-cta"
-                style={{
-                  padding: "7px 12px",
-                  borderRadius: 5,
-                  backgroundColor: "var(--bg)",
-                  color: "var(--text-mid)",
-                  fontSize: "var(--fs-ui)",
-                  fontWeight: 600,
-                  border: "1px solid var(--border)",
-                  cursor: authLoading ? "wait" : "pointer",
-                }}
-                disabled={authLoading}
-                onClick={() => onSignIn()}
-              >
-                {authLoading ? "Signing…" : "Sign in"}
-              </button>
-            ) : null}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
-                gap: 2,
-                padding: "5px 11px",
-                borderRadius: 5,
-                border: "1px solid var(--border)",
-                backgroundColor: "var(--bg)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--fs-sm)",
-                color: "var(--text-mid)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    backgroundColor: isConnected ? "var(--fulfilled)" : "var(--text-vlo)",
-                    flexShrink: 0,
-                  }}
-                />
+              />
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--fs-body)", color: "var(--text-hi)", fontWeight: 500 }}>
                 {walletLabel}
-              </div>
-              {balanceLabel ? (
-                <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>{balanceLabel}</span>
-              ) : null}
+              </span>
+              {isAuthenticated && (
+                <span style={{ fontSize: "var(--fs-xs)", padding: "2px 7px", borderRadius: 4, backgroundColor: "var(--fulfilled-bg)", color: "var(--fulfilled)", outline: "1px solid var(--fulfilled-border)", outlineOffset: -1, fontWeight: 600, letterSpacing: "0.04em" }}>
+                  Verified
+                </span>
+              )}
             </div>
-
-            <Link href="/ngo/submit">
-              <button
-                type="button"
-                className="ngo-cta"
+          </div>
+          {balanceLabel && (
+            <div style={{ textAlign: "right" }}>
+              <p style={{ fontSize: "var(--fs-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-vlo)", marginBottom: 4 }}>
+                USDC Balance
+              </p>
+              <span
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "7px 15px",
-                  borderRadius: 5,
-                  backgroundColor: "var(--accent)",
-                  color: "var(--accent-fg)",
-                  fontSize: "var(--fs-ui)",
-                  fontWeight: 600,
-                  letterSpacing: "0.005em",
-                  border: "none",
-                  cursor: "pointer",
-                  transition: "background-color 0.12s",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--fs-hero)",
+                  fontWeight: 500,
+                  color: "var(--text-hi)",
+                  fontVariantNumeric: "tabular-nums lining-nums",
+                  lineHeight: 1,
                 }}
               >
-                <Plus style={{ width: 13, height: 13 }} />
-                Submit Receipt
-              </button>
-            </Link>
-          </div>
+                {balanceLabel}
+              </span>
+            </div>
+          )}
         </div>
-        {authError ? (
-          <p style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px 8px", fontSize: "var(--fs-xs)", color: "var(--open)" }}>
-            {authError}
-          </p>
-        ) : null}
-      </header>
+      </div>
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "36px 32px 96px" }}>
+        {/* ── Region Overview ─────────────────────────────────────── */}
         <section className="fu fu-2" style={{ marginBottom: 40 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
             <p className="ngo-label" style={{ marginBottom: 0 }}>
@@ -442,11 +418,10 @@ function NgoDashboardInner() {
             <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-ui)" }}>No crisis regions in the database yet.</p>
           ) : (
             <div
+              className="ngo-card"
               style={{
-                backgroundColor: "var(--surface)",
-                border: "1px solid var(--border-faint)",
-                borderRadius: 8,
                 overflow: "hidden",
+                borderLeft: `4px solid ${ipc.color}`,
               }}
             >
               <div
@@ -456,6 +431,7 @@ function NgoDashboardInner() {
                   justifyContent: "space-between",
                   padding: "16px 20px",
                   borderBottom: "1px solid var(--border-faint)",
+                  backgroundColor: ipc.bg,
                 }}
               >
                 <span
@@ -478,7 +454,7 @@ function NgoDashboardInner() {
                     fontWeight: 600,
                     letterSpacing: "0.02em",
                     color: ipc.color,
-                    backgroundColor: ipc.bg,
+                    backgroundColor: "var(--surface)",
                     outline: `1px solid ${ipc.border}`,
                     outlineOffset: -1,
                     whiteSpace: "nowrap",
@@ -576,6 +552,7 @@ function NgoDashboardInner() {
         </section>
 
         <div className="ngo-grid">
+          {/* ── Receipt / Payout Table ─────────────────────────── */}
           <section className="fu fu-3">
             <p className="ngo-label">
               {isAuthenticated && queue.length > 0 ? "Your receipt requests" : "On-chain payouts to your wallet"}
@@ -591,14 +568,7 @@ function NgoDashboardInner() {
                   : "No indexed payouts to this address yet, or indexer/API is offline. Sign in to load your receipt queue from the gateway."}
               </p>
             ) : (
-              <div
-                style={{
-                  border: "1px solid var(--border-faint)",
-                  borderRadius: 7,
-                  overflow: "hidden",
-                  backgroundColor: "var(--surface)",
-                }}
-              >
+              <div className="ngo-card" style={{ overflow: "hidden" }}>
                 <div
                   style={{
                     display: "grid",
@@ -610,7 +580,7 @@ function NgoDashboardInner() {
                     textTransform: "uppercase",
                     letterSpacing: "0.07em",
                     color: "var(--text-vlo)",
-                    backgroundColor: "var(--bg)",
+                    backgroundColor: "var(--hero-bg)",
                   }}
                 >
                   <span>#</span>
@@ -703,17 +673,12 @@ function NgoDashboardInner() {
             </div>
           </section>
 
+          {/* ── Sidebar ────────────────────────────────────────── */}
           <aside style={{ display: "flex", flexDirection: "column", gap: 24, position: "sticky", top: 78 }}>
+            {/* Request counts */}
             <div className="fu fu-4">
               <p className="ngo-label">Requests</p>
-              <div
-                style={{
-                  borderRadius: 7,
-                  backgroundColor: "var(--surface)",
-                  border: "1px solid var(--border-faint)",
-                  overflow: "hidden",
-                }}
-              >
+              <div className="ngo-card" style={{ overflow: "hidden" }}>
                 {(["open", "pending", "fulfilled"] as const).map((s, i) => (
                   <div
                     key={s}
@@ -721,7 +686,7 @@ function NgoDashboardInner() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      padding: "13px 20px",
+                      padding: "14px 20px",
                       borderTop: i > 0 ? "1px solid var(--border-faint)" : "none",
                     }}
                   >
@@ -732,7 +697,7 @@ function NgoDashboardInner() {
                     <span
                       style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: "var(--fs-count)",
+                        fontSize: "var(--fs-hero)",
                         fontWeight: 500,
                         color: "var(--text-hi)",
                         fontVariantNumeric: "tabular-nums lining-nums",
@@ -743,9 +708,15 @@ function NgoDashboardInner() {
                     </span>
                   </div>
                 ))}
+                <div style={{ padding: "10px 20px", borderTop: "1px solid var(--border-faint)", backgroundColor: "var(--hero-bg)" }}>
+                  <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>
+                    {totalRequests} total requests
+                  </span>
+                </div>
               </div>
             </div>
 
+            {/* Pool membership */}
             <div className="fu fu-5">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <p className="ngo-label" style={{ marginBottom: 0 }}>
@@ -776,12 +747,8 @@ function NgoDashboardInner() {
                     return (
                       <div
                         key={pool.id}
-                        style={{
-                          padding: "16px 18px",
-                          borderRadius: 8,
-                          backgroundColor: "var(--surface)",
-                          border: "1px solid var(--border-faint)",
-                        }}
+                        className="ngo-card"
+                        style={{ padding: "16px 18px" }}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
                           <span
@@ -847,9 +814,9 @@ function NgoDashboardInner() {
                               </div>
                             </div>
 
-                            <div style={{ height: 5, borderRadius: 999, display: "flex", overflow: "hidden" }}>
-                              <div style={{ width: `${committedPct}%`, backgroundColor: "var(--pool-committed)", flexShrink: 0 }} />
-                              <div style={{ width: `${inPoolPct}%`, backgroundColor: "var(--pool-in)", flexShrink: 0 }} />
+                            <div style={{ height: 7, borderRadius: 999, display: "flex", overflow: "hidden", gap: 2 }}>
+                              <div style={{ width: `${committedPct}%`, backgroundColor: "var(--pool-committed)", flexShrink: 0, borderRadius: 999 }} />
+                              <div style={{ width: `${inPoolPct}%`, backgroundColor: "var(--pool-in)", flexShrink: 0, borderRadius: 999 }} />
                             </div>
 
                             <p style={{ marginTop: 7, fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>
