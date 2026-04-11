@@ -7,7 +7,7 @@ import { CheckCircle2, Loader2, Upload, Camera, FileText, Shield, MapPin, Globe 
 import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
 import { API_GATEWAY_URL } from "@/lib/constants";
-import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
+import { useNgoAuth } from "@/hooks/useWallet";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
 
@@ -42,29 +42,29 @@ type PipelineResult = {
 
 function SubmitInner() {
   const walletAuth = useNgoAuth();
-  const emailAuth = useEmailAuth();
-  const token = walletAuth.token ?? emailAuth.token;
-  const isAuthenticated = walletAuth.isAuthenticated || emailAuth.isAuthenticated;
+  const token = walletAuth.token;
+  const isAuthenticated = walletAuth.isAuthenticated;
 
   const { data: allRegions = [], isLoading: regionsLoading } = useCrisisRegions();
   const [operatedRegions, setOperatedRegions] = useState<string[] | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) { setOperatedRegions(null); return; }
+    setProfileLoading(true);
     fetch(`${API_GATEWAY_URL}/ngo/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
       .then((body: { operated_regions?: string[] }) => {
-        if (Array.isArray(body.operated_regions)) setOperatedRegions(body.operated_regions);
+        setOperatedRegions(Array.isArray(body.operated_regions) ? body.operated_regions : []);
       })
-      .catch(() => setOperatedRegions(null));
+      .catch(() => setOperatedRegions([]))
+      .finally(() => setProfileLoading(false));
   }, [token]);
 
-  const regions =
-    operatedRegions && operatedRegions.length > 0
-      ? allRegions.filter((r) => operatedRegions.includes(r.id))
-      : allRegions;
+  // Strictly restrict to NGO's operated regions only
+  const regions = allRegions.filter((r) => operatedRegions?.includes(r.id));
 
   const [regionId, setRegionId] = useState("");
   const [amount, setAmount] = useState("");
@@ -344,23 +344,31 @@ function SubmitInner() {
             <div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }}>
                 <label htmlFor="region" style={{ ...labelStyle, marginBottom: 0 }}>Region <span style={{ color: "var(--open)" }}>*</span></label>
-                {operatedRegions && operatedRegions.length > 0 && (
-                  <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>limited to your approved regions</span>
-                )}
+                <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>your approved regions only</span>
               </div>
-              <select
-                id="region"
-                required
-                value={regionId}
-                onChange={(e) => setRegionId(e.target.value)}
-                style={{ ...inputStyle, appearance: "none" }}
-              >
-                <option value="">— Select a region —</option>
-                {regionsLoading && <option disabled>Loading…</option>}
-                {regions.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name} ({r.country})</option>
-                ))}
-              </select>
+              {profileLoading || regionsLoading ? (
+                <div style={{ ...inputStyle, color: "var(--text-vlo)", display: "flex", alignItems: "center", gap: 8 }}>
+                  <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
+                  Loading your regions…
+                </div>
+              ) : operatedRegions !== null && operatedRegions.length === 0 ? (
+                <div style={{ ...inputStyle, color: "var(--text-vlo)", fontSize: "var(--fs-xs)" }}>
+                  No regions assigned to your NGO yet. Contact an admin.
+                </div>
+              ) : (
+                <select
+                  id="region"
+                  required
+                  value={regionId}
+                  onChange={(e) => setRegionId(e.target.value)}
+                  style={{ ...inputStyle, appearance: "none" }}
+                >
+                  <option value="">— Select a region —</option>
+                  {regions.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name} ({r.country})</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Amount */}

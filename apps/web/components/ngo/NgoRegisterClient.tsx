@@ -12,21 +12,20 @@ import { Web3Provider } from "@/providers/Web3Provider";
 import { API_GATEWAY_URL, USDC_ADDRESS, USDC_DECIMALS, VAULT_ADDRESS } from "@/lib/constants";
 import { erc20Abi } from "@/lib/wallet-contracts";
 import { shortenAddress } from "@/lib/wallet-utils";
-import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
+import { useNgoAuth } from "@/hooks/useWallet";
+import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
 import { NgoWalletButton } from "@/components/ngo/NgoWalletButton";
 
 function RegisterInner() {
   const { address, isConnected } = useAccount();
   const walletAuth = useNgoAuth();
-  const emailAuth = useEmailAuth();
-  const isAuthenticated = walletAuth.isAuthenticated || emailAuth.isAuthenticated;
+  const isAuthenticated = walletAuth.isAuthenticated;
   const isConfigured = Boolean(USDC_ADDRESS && VAULT_ADDRESS);
 
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
-  const [passwordInput, setPasswordInput] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const { data: allRegions = [] } = useCrisisRegions();
 
   const { data: usdcBalance = 0n } = useReadContract({
     address: USDC_ADDRESS || undefined,
@@ -45,24 +44,13 @@ function RegisterInner() {
     catch (e) { setAuthError(e instanceof Error ? e.message : "Sign-in failed"); }
   }
 
-  async function onEmailSignIn(e: React.FormEvent) {
-    e.preventDefault();
-    setAuthError(null);
-    try {
-      await emailAuth.login(emailInput, passwordInput);
-      setShowEmailForm(false);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "Sign-in failed");
-    }
-  }
-
-  function logout() { walletAuth.logout(); emailAuth.logout(); }
+  function logout() { walletAuth.logout(); }
 
   const [orgName, setOrgName] = useState("");
   const [country, setCountry] = useState("");
   const [regNumber, setRegNumber] = useState("");
   const [contactEmail, setContactEmail] = useState("");
-  const [regions, setRegions] = useState("");
+  const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +69,7 @@ function RegisterInner() {
           country: country || null,
           regNumber: regNumber || null,
           contactEmail: contactEmail || null,
-          regions: regions ? regions.split(",").map((s) => s.trim()).filter(Boolean) : null,
+          regions: selectedRegions.length > 0 ? selectedRegions : null,
           walletAddress: address,
         }),
       });
@@ -121,6 +109,53 @@ function RegisterInner() {
       <NgoHeader />
 
       <div style={{ maxWidth: 500, margin: "0 auto", padding: "48px 32px 96px" }}>
+
+        {/* ── Wallet / Auth card ─────────────────────────────── */}
+        <div className="fu fu-1 ngo-card" style={{ padding: "20px 24px", marginBottom: 32, display: "flex", flexDirection: "column", gap: 14 }}>
+          <p style={{ ...labelStyle, marginBottom: 0 }}>Wallet &amp; Session</p>
+          <hr className="ngo-field-divider" />
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <NgoWalletButton />
+            {!isConfigured && (
+              <span style={{ fontSize: "var(--fs-xs)", color: "var(--pending)" }}>Contracts not configured</span>
+            )}
+            {balanceLabel && (
+              <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", fontFamily: "var(--font-mono)" }}>{balanceLabel}</span>
+            )}
+          </div>
+
+          {isConnected && !isAuthenticated && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{ padding: "6px 14px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-mid)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: walletAuth.loading ? "wait" : "pointer" }}
+                disabled={walletAuth.loading}
+                onClick={onSignIn}
+              >
+                {walletAuth.loading ? "Signing…" : "Sign in with wallet"}
+              </button>
+              {authError && <p style={{ width: "100%", fontSize: "var(--fs-xs)", color: "var(--open)", margin: 0 }}>{authError}</p>}
+            </div>
+          )}
+
+          {isAuthenticated && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: "var(--fs-xs)", color: "var(--fulfilled)", padding: "3px 10px", border: "1px solid var(--fulfilled-border)", borderRadius: 5, backgroundColor: "var(--fulfilled-bg)" }}>
+                Authenticated
+              </span>
+              <button
+                type="button"
+                className="ngo-cta"
+                style={{ padding: "6px 14px", borderRadius: 5, backgroundColor: "var(--bg)", color: "var(--text-lo)", fontSize: "var(--fs-ui)", fontWeight: 600, border: "1px solid var(--border)", cursor: "pointer" }}
+                onClick={logout}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="fu fu-1" style={{ marginBottom: 32 }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--text-hi)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
@@ -287,14 +322,59 @@ function RegisterInner() {
                 />
               </div>
               <div>
-                <label htmlFor="regions" style={labelStyle}>Regions operated in (comma-separated)</label>
-                <input
-                  id="regions"
-                  value={regions}
-                  onChange={(e) => setRegions(e.target.value)}
-                  placeholder="SDN-DARFUR-2024, HTI-PORT-2024"
-                  style={inputStyle}
-                />
+                <label style={labelStyle}>Regions operated in</label>
+                <div style={{
+                  border: "1px solid var(--border)",
+                  borderRadius: 7,
+                  backgroundColor: "var(--surface)",
+                  boxShadow: "var(--shadow-card)",
+                  maxHeight: 220,
+                  overflowY: "auto",
+                  padding: "6px 4px",
+                }}>
+                  {allRegions.length === 0 ? (
+                    <p style={{ padding: "8px 12px", margin: 0, fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>Loading regions…</p>
+                  ) : (
+                    allRegions.map((r) => {
+                      const checked = selectedRegions.includes(r.id);
+                      return (
+                        <label
+                          key={r.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "7px 12px",
+                            borderRadius: 5,
+                            cursor: "pointer",
+                            backgroundColor: checked ? "var(--accent-lo)" : "transparent",
+                            transition: "background-color 0.1s",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setSelectedRegions((prev) =>
+                                prev.includes(r.id)
+                                  ? prev.filter((id) => id !== r.id)
+                                  : [...prev, r.id]
+                              )
+                            }
+                            style={{ accentColor: "var(--accent)", width: 14, height: 14, flexShrink: 0 }}
+                          />
+                          <span style={{ fontSize: "var(--fs-body)", color: "var(--text-hi)" }}>{r.name}</span>
+                          <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", marginLeft: "auto" }}>{r.country}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+                {selectedRegions.length > 0 && (
+                  <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", marginTop: 6 }}>
+                    {selectedRegions.length} region{selectedRegions.length > 1 ? "s" : ""} selected
+                  </p>
+                )}
               </div>
             </div>
 

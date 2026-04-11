@@ -13,7 +13,7 @@ import { API_GATEWAY_URL, EXPLORER_BASE_URL, USDC_DECIMALS } from "@/lib/constan
 import { getNgoQueue, getPoolLedger, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
 import { poolIdFromRegionId } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
-import { useNgoAuth, useEmailAuth } from "@/hooks/useWallet";
+import { useNgoAuth } from "@/hooks/useWallet";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
 
 type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
@@ -85,9 +85,8 @@ function poolKeyForRegion(r: CrisisRegion): string {
 function NgoDashboardInner() {
   const { address, isConnected } = useAccount();
   const walletAuth = useNgoAuth();
-  const emailAuth = useEmailAuth();
-  const token = walletAuth.token ?? emailAuth.token;
-  const isAuthenticated = walletAuth.isAuthenticated || emailAuth.isAuthenticated;
+  const token = walletAuth.token;
+  const isAuthenticated = walletAuth.isAuthenticated;
 
   const { data: allRegions = [], isLoading: regionsLoading, error: regionsError } = useCrisisRegions();
   const [operatedRegions, setOperatedRegions] = useState<string[] | null>(null);
@@ -317,7 +316,7 @@ function NgoDashboardInner() {
         {!isAuthenticated && (
           <div style={{ padding: "48px 24px", textAlign: "center", border: "1px solid var(--border-faint)", borderRadius: 10, backgroundColor: "var(--surface)" }}>
             <p style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-hi)", marginBottom: 8 }}>Sign in to access the NGO dashboard</p>
-            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Connect your wallet and click &ldquo;Sign in&rdquo; in the header to authenticate.</p>
+            <p style={{ fontSize: "var(--fs-body)", color: "var(--text-lo)", marginBottom: 20 }}>Connect your wallet and sign in from the <Link href="/ngo/register" style={{ color: "var(--accent-text)", textDecoration: "none" }}>Profile</Link> page.</p>
           </div>
         )}
         {isAuthenticated && (
