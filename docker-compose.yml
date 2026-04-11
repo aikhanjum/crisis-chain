@@ -1,4 +1,6 @@
 services:
+
+  # ── Database ────────────────────────────────────────────────────────
   postgres:
     image: postgres:16
     environment:
@@ -9,6 +11,138 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d   # auto-runs all .sql files on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Rust indexer ────────────────────────────────────────────────────
+  # Polls Arbitrum Sepolia for Donation/Payout events and exposes REST API
+  indexer:
+    build:
+      context: .
+      dockerfile: crates/indexer/Dockerfile   # TODO: create this Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/crisis_pool
+      HTTP_BIND_ADDR: 0.0.0.0:3001
+      RPC_URL: ${RPC_URL}
+      CHAIN_ID: ${CHAIN_ID:-421614}
+      VAULT_ADDRESS: ${VAULT_ADDRESS}
+      USDC_ADDRESS: ${USDC_ADDRESS}
+      START_BLOCK: ${START_BLOCK:-0}
+      CONFIRMATIONS: ${CONFIRMATIONS:-20}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["indexer"]   # opt-in: docker compose --profile indexer up
+
+  # ── Python: Crisis Intelligence ─────────────────────────────────────
+  crisis-intelligence:
+    build: ./services/crisis-intelligence
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/crisis_pool
+      ACLED_EMAIL: ${ACLED_EMAIL}
+      ACLED_API_KEY: ${ACLED_API_KEY}
+      AI_SUMMARY_URL: http://ai-summary:8002
+      BLOCKCHAIN_BRIDGE_URL: http://blockchain-bridge:4001
+      SEVERITY_DEPLOY_THRESHOLD: ${SEVERITY_DEPLOY_THRESHOLD:-60}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Python: AI Summary ──────────────────────────────────────────────
+  ai-summary:
+    build: ./services/ai-summary
+    ports:
+      - "8002:8002"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Python: OCR Receipt ─────────────────────────────────────────────
+  ocr-receipt:
+    build: ./services/ocr-receipt
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/crisis_pool
+      BLOCKCHAIN_BRIDGE_URL: http://blockchain-bridge:4001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8003/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Node.js: API Gateway ────────────────────────────────────────────
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/crisis_pool
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      INDEXER_URL: http://indexer:3001
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      PORT: 4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Node.js: Blockchain Bridge ──────────────────────────────────────
+  blockchain-bridge:
+    build: ./services/blockchain-bridge
+    ports:
+      - "4001:4001"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/crisis_pool
+      RPC_URL: ${RPC_URL}
+      PRIVATE_KEY: ${PRIVATE_KEY}
+      USDC_ADDRESS: ${USDC_ADDRESS}
+      PINATA_API_KEY: ${PINATA_API_KEY}
+      PINATA_SECRET_KEY: ${PINATA_SECRET_KEY}
+      PORT: 4001
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Next.js Frontend ────────────────────────────────────────────────
+  web:
+    build: ./apps/web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:4000
+      NEXT_PUBLIC_INDEXER_URL: http://localhost:3001
+      NEXT_PUBLIC_CHAIN_ID: ${CHAIN_ID:-421614}
+      NEXT_PUBLIC_VAULT_ADDRESS: ${VAULT_ADDRESS}
+      NEXT_PUBLIC_USDC_ADDRESS: ${USDC_ADDRESS}
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${WALLETCONNECT_PROJECT_ID}
+    depends_on:
+      - api-gateway
+    profiles: ["frontend"]  # opt-in: docker compose --profile frontend up
 
 volumes:
   postgres_data:
