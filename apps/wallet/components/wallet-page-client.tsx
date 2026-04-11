@@ -37,6 +37,7 @@ const actionLabels: Record<TxAction, string> = {
   approve: "Approve",
   donate: "Donate",
   payout: "Payout",
+  requestReimbursement: "Reimburse Request",
 };
 
 function shorten(value?: string) {
@@ -54,18 +55,12 @@ function WalletScreen() {
   const [poolId, setPoolId] = useState("88");
   const [amount, setAmount] = useState("25");
   const [memo, setMemo] = useState("donation-88");
-  const [recipient, setRecipient] = useState("");
-  const [payoutRef, setPayoutRef] = useState("payout-88");
   const [poolStats, setPoolStats] = useState<PoolStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHistory, setTxHistory] = useState<TxRecord[]>([]);
-
-  useEffect(() => {
-    if (!recipient && address) setRecipient(address);
-  }, [address, recipient]);
 
   const isWrongNetwork = isConnected && chainId !== humanityTestnet.id;
   const isConfigured = Boolean(usdcAddress && vaultAddress);
@@ -189,6 +184,7 @@ function WalletScreen() {
         functionName: "donate",
         args: [BigInt(poolId), parsedAmount, toBytes32(memo)],
       });
+      await new Promise((r) => setTimeout(r, 4000));
       await loadPoolStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Donate failed");
@@ -197,44 +193,16 @@ function WalletScreen() {
     }
   }
 
-  async function onPayout() {
-    setError(null);
-    setIsWorking(true);
-    try {
-      if (!vaultAddress) throw new Error("Vault address missing");
-      if (!recipient.startsWith("0x") || recipient.length !== 42) {
-        throw new Error("Enter a valid recipient address");
-      }
-      if (parsedAmount <= 0n) throw new Error("Enter a valid amount");
-      await ensureNetwork();
-      await sendTx("payout", {
-        address: vaultAddress,
-        abi: vaultAbi,
-        functionName: "payout",
-        args: [
-          BigInt(poolId),
-          recipient as `0x${string}`,
-          parsedAmount,
-          toBytes32(payoutRef),
-        ],
-      });
-      await loadPoolStats();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Payout failed");
-    } finally {
-      setIsWorking(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900 p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm text-cyan-400">Humanity Wallet Demo</p>
-            <h1 className="text-2xl font-semibold">Crisis Pool Transactions</h1>
+            <p className="text-sm text-cyan-400">DONOR WALLET</p>
+            <h1 className="text-2xl font-semibold">Donate to a Crisis Pool</h1>
             <p className="mt-1 text-sm text-slate-400">
-              Approve, donate, and payout with explorer-verifiable transactions.
+              Use your wallet to approve mUSDC, donate into a regional pool, and track transparent activity.
             </p>
           </div>
           <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
@@ -243,7 +211,7 @@ function WalletScreen() {
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="mb-3 text-lg font-medium">Network and Contract Status</h2>
+              <h2 className="mb-3 text-lg font-medium">Wallet & Network Status</h2>
               <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                 <p>
                   <span className="text-slate-400">Wallet:</span>{" "}
@@ -276,7 +244,7 @@ function WalletScreen() {
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="mb-4 text-lg font-medium">Transaction Panel</h2>
+              <h2 className="mb-4 text-lg font-medium">Donate</h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="text-sm">
                   <span className="mb-1 block text-slate-400">Pool ID</span>
@@ -302,45 +270,22 @@ function WalletScreen() {
                     onChange={(e) => setMemo(e.target.value)}
                   />
                 </label>
-                <label className="text-sm sm:col-span-2">
-                  <span className="mb-1 block text-slate-400">Payout recipient</span>
-                  <input
-                    className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-                    value={recipient}
-                    onChange={(e) => setRecipient(e.target.value)}
-                  />
-                </label>
-                <label className="text-sm sm:col-span-2">
-                  <span className="mb-1 block text-slate-400">Payout reference</span>
-                  <input
-                    className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-                    value={payoutRef}
-                    onChange={(e) => setPayoutRef(e.target.value)}
-                  />
-                </label>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   disabled={!isConnected || isWorking || !isConfigured}
                   onClick={onApprove}
-                  className="rounded bg-indigo-500 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-700"
+                  className="rounded bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500 disabled:cursor-not-allowed disabled:bg-slate-700"
                 >
-                  {isWorking ? "Working..." : "Approve"}
+                  {isWorking ? "Working..." : "1. Approve"}
                 </button>
                 <button
                   disabled={!isConnected || isWorking || !isConfigured}
                   onClick={onDonate}
-                  className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
+                  className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
                 >
-                  {isWorking ? "Working..." : "Donate"}
-                </button>
-                <button
-                  disabled={!isConnected || isWorking || !isConfigured}
-                  onClick={onPayout}
-                  className="rounded bg-fuchsia-500 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-700"
-                >
-                  {isWorking ? "Working..." : "Payout"}
+                  {isWorking ? "Working..." : "2. Donate"}
                 </button>
               </div>
               {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
