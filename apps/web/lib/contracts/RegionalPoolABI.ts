@@ -1,18 +1,9 @@
-export const RegionalPoolABI = [
-  {
-    inputs: [{ internalType: "uint256", name: "amount", type: "uint256" }],
-    name: "donate",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "account", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
+/**
+ * @deprecated Use vaultAbi from @/lib/wallet-contracts instead.
+ * The actual CrisisPoolVault uses donate(poolId, amount, memo),
+ * not donate(amount). This file is kept for backward compatibility
+ * with DonateForm but should be migrated.
+ */
+export { vaultAbi as RegionalPoolABI } from "../wallet-contracts";
 
 export const MOCK_REGIONAL_POOL_ADDRESS = "0x1234567890123456789012345678901234567890";

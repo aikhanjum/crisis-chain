@@ -1,0 +1,66 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - link "CrisisChain/NGO Portal" [ref=e8] [cursor=pointer]:
+            - /url: /ngo/dashboard
+            - img [ref=e9]
+            - generic [ref=e13]: CrisisChain/NGO Portal
+          - navigation [ref=e15]:
+            - link "Dashboard" [ref=e16] [cursor=pointer]:
+              - /url: /ngo/dashboard
+            - link "Submit Receipt" [ref=e17] [cursor=pointer]:
+              - /url: /ngo/submit
+            - link "Register" [ref=e18] [cursor=pointer]:
+              - /url: /ngo/register
+        - generic [ref=e19]:
+          - generic [ref=e20]: Contracts not configured
+          - button "Connect Wallet" [ref=e22] [cursor=pointer]
+          - link "Submit Receipt" [ref=e23] [cursor=pointer]:
+            - /url: /ngo/submit
+            - button "Submit Receipt" [ref=e24]:
+              - img [ref=e25]
+              - text: Submit Receipt
+    - generic [ref=e28]:
+      - paragraph [ref=e29]: NGO Wallet
+      - generic [ref=e32]: Not connected
+    - main [ref=e33]:
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - paragraph [ref=e36]: Region Overview
+          - generic [ref=e37]: Crisis nodes API
+        - paragraph [ref=e38]: Loading region data…
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - paragraph [ref=e41]: On-chain payouts to your wallet
+          - paragraph [ref=e42]: Connect a wallet to see payout history.
+          - generic [ref=e44]: "Tracked requests: 0 (sign in for receipt queue)"
+        - complementary [ref=e45]:
+          - generic [ref=e46]:
+            - paragraph [ref=e47]: Requests
+            - generic [ref=e48]:
+              - generic [ref=e49]:
+                - generic [ref=e50]:
+                  - img [ref=e51]
+                  - text: Open
+                - generic [ref=e54]: "0"
+              - generic [ref=e55]:
+                - generic [ref=e56]:
+                  - img [ref=e57]
+                  - text: Pending
+                - generic [ref=e60]: "0"
+              - generic [ref=e61]:
+                - generic [ref=e62]:
+                  - img [ref=e63]
+                  - text: Fulfilled
+                - generic [ref=e66]: "0"
+              - generic [ref=e68]: 0 total requests
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - paragraph [ref=e71]: Pool membership
+              - generic [ref=e72]:
+                - generic [ref=e75]: Paid out
+                - generic [ref=e78]: In pool
+            - paragraph [ref=e79]: Load regions to see pools.
+  - alert [ref=e80]
