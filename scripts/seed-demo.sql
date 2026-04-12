@@ -8,7 +8,7 @@ VALUES (
   'CrisisChain Demo NGO',
   'Sudan',
   'DEMO-001',
-  ARRAY['SDN-DARFUR-2024', 'HTI-PORT-2024'],
+  ARRAY['SDN-DARFUR-2024','SDN-KHARTOUM-2024','SDN-EAST-2024','HTI-PORT-2024','HTI-ARTIBONITE-2024','HTI-SUD-2024'],
   'demo@crisischain.org',
   'approved',
   NOW()

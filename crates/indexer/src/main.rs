@@ -37,6 +37,8 @@ struct Config {
     database_url: String,
     start_block: u64,
     confirmations: u64,
+    /// Max blocks per eth_getLogs (Alchemy free tier allows 10).
+    log_chunk_blocks: u64,
     http_bind_addr: SocketAddr,
 }
 
@@ -184,33 +186,41 @@ async fn run_indexer_loop(cfg: Config, db: PgPool) -> Result<()> {
         let to_block = safe_head;
         info!("indexing logs in block range [{from_block}, {to_block}]");
 
-        let filter = Filter::new()
-            .address(cfg.vault_address)
-            .from_block(BlockNumberOrTag::Number(from_block))
-            .to_block(BlockNumberOrTag::Number(to_block))
-            .event_signature(vec![donation_topic, payout_topic]);
-
-        let logs = provider
-            .get_logs(&filter)
-            .await
-            .context("failed to fetch logs")?;
-
         let mut tx = db.begin().await.context("failed to begin db tx")?;
 
-        for log in logs {
-            let Some(topic0) = log.topics().first().copied() else {
-                continue;
-            };
+        let mut chunk_start = from_block;
+        while chunk_start <= to_block {
+            let chunk_end = (chunk_start + cfg.log_chunk_blocks.saturating_sub(1)).min(to_block);
+            let filter = Filter::new()
+                .address(cfg.vault_address)
+                .from_block(BlockNumberOrTag::Number(chunk_start))
+                .to_block(BlockNumberOrTag::Number(chunk_end))
+                .event_signature(vec![donation_topic, payout_topic]);
 
-            if topic0 == donation_topic {
-                if let Err(e) = persist_donation(&mut tx, &cfg, &log).await {
-                    warn!("skipping donation log due to decode/persist error: {e:#}");
-                }
-            } else if topic0 == payout_topic {
-                if let Err(e) = persist_payout(&mut tx, &cfg, &log).await {
-                    warn!("skipping payout log due to decode/persist error: {e:#}");
+            let logs = provider
+                .get_logs(&filter)
+                .await
+                .with_context(|| {
+                    format!("failed to fetch logs for blocks [{chunk_start}, {chunk_end}]")
+                })?;
+
+            for log in logs {
+                let Some(topic0) = log.topics().first().copied() else {
+                    continue;
+                };
+
+                if topic0 == donation_topic {
+                    if let Err(e) = persist_donation(&mut tx, &cfg, &log).await {
+                        warn!("skipping donation log due to decode/persist error: {e:#}");
+                    }
+                } else if topic0 == payout_topic {
+                    if let Err(e) = persist_payout(&mut tx, &cfg, &log).await {
+                        warn!("skipping payout log due to decode/persist error: {e:#}");
+                    }
                 }
             }
+
+            chunk_start = chunk_end.saturating_add(1);
         }
 
         cursor = to_block;
@@ -431,6 +441,11 @@ impl Config {
             .unwrap_or_else(|_| "0.0.0.0:3000".to_owned())
             .parse::<SocketAddr>()
             .context("HTTP_BIND_ADDR must be host:port")?;
+        let log_chunk_blocks = std::env::var("LOG_CHUNK_BLOCKS")
+            .unwrap_or_else(|_| "10".to_owned())
+            .parse::<u64>()
+            .context("LOG_CHUNK_BLOCKS must be a positive integer")?;
+        let log_chunk_blocks = log_chunk_blocks.max(1);
 
         Ok(Self {
             rpc_url,
@@ -440,6 +455,7 @@ impl Config {
             database_url,
             start_block,
             confirmations,
+            log_chunk_blocks,
             http_bind_addr,
         })
     }
