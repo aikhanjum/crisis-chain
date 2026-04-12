@@ -1,7 +1,7 @@
 "use client";
 
 import { darkTheme } from "@rainbow-me/rainbowkit";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowUpRight, CheckCircle2, CircleDot, Clock, FileText, Globe, Shield, Banknote } from "lucide-react";
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
@@ -10,7 +10,7 @@ import { useAccount } from "wagmi";
 
 import { Web3Provider } from "@/providers/Web3Provider";
 import { API_GATEWAY_URL, EXPLORER_BASE_URL, USDC_DECIMALS } from "@/lib/constants";
-import { getNgoQueue, getPoolLedger, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
+import { executeVaultPayout, getNgoQueue, getPoolLedger, type CrisisRegion, type NgoReceiptRequest } from "@/lib/api";
 import { poolIdFromRegionId } from "@/lib/wallet-utils";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth } from "@/hooks/useWallet";
@@ -67,13 +67,14 @@ function StatusIcon({ status, className }: { status: UiStatus; className?: strin
 function mapReceiptStatus(s: NgoReceiptRequest["status"]): UiStatus {
   if (s === "pending") return "submitted";
   if (s === "rejected") return "rejected";
-  // Demo / auto-flow: treat gateway-approved receipts like finished payouts in the UI
-  if (s === "approved" || s === "paid") return "paid";
+  if (s === "approved") return "verifying"; // approved in DB, vault payout not done yet
+  if (s === "paid") return "paid";
   return "submitted";
 }
 
-function chipLabel(status: UiStatus) {
+function chipLabel(status: UiStatus, raw?: NgoReceiptRequest["status"]) {
   if (status === "submitted") return "Submitted";
+  if (status === "verifying" && raw === "approved") return "Approved";
   if (status === "verifying") return "Verifying";
   if (status === "rejected") return "Rejected";
   return "Paid";
@@ -104,8 +105,7 @@ function pipelineSteps(receipt: NgoReceiptRequest | null, status: UiStatus) {
 
   const hasIpfs = !!receipt.receipt_ipfs;
   const hasTx = !!receipt.payout_tx_hash;
-  /** Backend may leave rows as `approved` without IPFS/tx; UI still shows a completed demo flow */
-  const flowDone = receipt.status === "approved" || receipt.status === "paid";
+  const paidOnChain = receipt.status === "paid";
 
   return [
     {
@@ -117,34 +117,34 @@ function pipelineSteps(receipt: NgoReceiptRequest | null, status: UiStatus) {
     {
       label: "Pinned to IPFS",
       icon: Globe,
-      done: hasIpfs || flowDone,
+      done: hasIpfs || paidOnChain,
       detail: hasIpfs
         ? receipt.receipt_ipfs
-        : flowDone
+        : paidOnChain
           ? "Archived"
           : "Awaiting IPFS pin",
     },
     {
       label: "On-chain delivery claim",
       icon: Shield,
-      done: hasTx || flowDone,
+      done: hasTx || paidOnChain,
       detail: hasTx
         ? receipt.status === "paid"
           ? "Claim recorded on-chain"
           : "Claim submitted — awaiting attestations"
-        : flowDone
+        : paidOnChain
           ? "Recorded"
           : "Awaiting on-chain submission",
     },
     {
       label: "Payout",
       icon: Banknote,
-      done: flowDone,
+      done: paidOnChain,
       detail: hasTx
         ? receipt.payout_tx_hash!.slice(0, 10) + "…"
-        : flowDone
+        : paidOnChain
           ? "Paid"
-          : "Awaiting consensus threshold",
+          : "Run vault payout when pool is funded",
     },
   ];
 }
@@ -152,7 +152,32 @@ function pipelineSteps(receipt: NgoReceiptRequest | null, status: UiStatus) {
 function ReceiptRow({ tx, isLast }: ReceiptRowProps) {
   const [expanded, setExpanded] = useState(false);
   const toggle = useCallback(() => setExpanded((v) => !v), []);
+  const { token } = useNgoAuth();
+  const queryClient = useQueryClient();
+  const [vaultBusy, setVaultBusy] = useState(false);
+  const [vaultErr, setVaultErr] = useState<string | null>(null);
   const steps = pipelineSteps(tx.rawReceipt, tx.status);
+  const canVaultPayout =
+    !!tx.rawReceipt &&
+    (tx.rawReceipt.status === "pending" || tx.rawReceipt.status === "approved");
+
+  const handleVaultPayout = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!token || !tx.rawReceipt) return;
+      setVaultErr(null);
+      setVaultBusy(true);
+      try {
+        await executeVaultPayout(tx.rawReceipt.id, token);
+        await queryClient.invalidateQueries({ queryKey: ["ngoQueue", token] });
+      } catch (err) {
+        setVaultErr(err instanceof Error ? err.message : "Vault payout failed");
+      } finally {
+        setVaultBusy(false);
+      }
+    },
+    [token, tx.rawReceipt, queryClient],
+  );
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
 
@@ -220,7 +245,7 @@ function ReceiptRow({ tx, isLast }: ReceiptRowProps) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span className={`chip chip-${tx.status === "submitted" ? "pending" : tx.status === "verifying" ? "pending" : tx.status === "paid" ? "fulfilled" : "open"}`}>
             <StatusIcon status={tx.status} />
-            {chipLabel(tx.status)}
+            {chipLabel(tx.status, tx.rawReceipt?.status)}
           </span>
         </div>
       </div>
@@ -285,6 +310,38 @@ function ReceiptRow({ tx, isLast }: ReceiptRowProps) {
               );
             })}
           </div>
+          {canVaultPayout && token ? (
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-faint)" }}>
+              <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", marginBottom: 10, lineHeight: 1.45 }}>
+                Pulls USDC from the CrisisPoolVault for this region&apos;s pool (same pool id as donate). Ensure the pool has balance and the blockchain-bridge is running.
+              </p>
+              <button
+                type="button"
+                onClick={handleVaultPayout}
+                disabled={vaultBusy}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 14px",
+                  borderRadius: 6,
+                  border: "1px solid var(--fulfilled-border)",
+                  backgroundColor: "var(--fulfilled-bg)",
+                  color: "var(--fulfilled)",
+                  fontSize: "var(--fs-ui)",
+                  fontWeight: 600,
+                  cursor: vaultBusy ? "wait" : "pointer",
+                  opacity: vaultBusy ? 0.7 : 1,
+                }}
+              >
+                <Banknote style={{ width: 14, height: 14 }} />
+                {vaultBusy ? "Submitting…" : "Execute vault payout"}
+              </button>
+              {vaultErr ? (
+                <p style={{ color: "var(--open)", fontSize: "var(--fs-xs)", marginTop: 8 }}>{vaultErr}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -402,7 +459,7 @@ function NgoDashboardInner() {
           id: r.id.slice(0, 8),
           date: new Date(r.submitted_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
           desc: r.item_notes || "Receipt request",
-          usdc: Number(r.requested_amount),
+          usdc: Number(r.approved_amount ?? r.requested_amount),
           status: ui,
           tx: r.payout_tx_hash,
           rawReceipt: r,
@@ -427,7 +484,8 @@ function NgoDashboardInner() {
       let paid = 0;
       for (const r of queue) {
         if (r.status === "pending") submitted += 1;
-        else if (r.status === "approved" || r.status === "paid") paid += 1;
+        else if (r.status === "approved") verifying += 1;
+        else if (r.status === "paid") paid += 1;
       }
       return { submitted, verifying, paid };
     }

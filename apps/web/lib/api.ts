@@ -207,3 +207,21 @@ export async function markReceiptPaid(receiptId: string, txHash: string, token: 
   if (!res.ok) throw new Error("Failed to update receipt");
   return res.json();
 }
+
+/** Calls api-gateway → blockchain-bridge → vault.payout (real USDC move from CrisisPoolVault). */
+export async function executeVaultPayout(receiptId: string, token: string): Promise<{
+  status?: string;
+  txHash?: string;
+  receiptId?: string;
+}> {
+  const res = await fetch(`${API_GATEWAY_URL}/ngo/receipt/${receiptId}/vault-payout`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body: unknown = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = (body as { error?: string })?.error ?? `HTTP ${res.status}`;
+    throw new Error(err);
+  }
+  return body as { status?: string; txHash?: string; receiptId?: string };
+}

@@ -133,6 +133,8 @@ services:
       INDEXER_URL: http://indexer:3001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       PORT: 4000
+      # Vault payouts: gateway calls bridge → reimbursement/submit (use service name in Compose).
+      BLOCKCHAIN_BRIDGE_URL: ${BLOCKCHAIN_BRIDGE_URL:-http://blockchain-bridge:4001}
       # Always use Compose DNS — never http://localhost from .env here (localhost is THIS container).
       CRISIS_INTELLIGENCE_URL: http://crisis-intelligence:8001
     depends_on:

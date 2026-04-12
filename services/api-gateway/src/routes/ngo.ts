@@ -1,8 +1,12 @@
 import { Router } from "express";
+import { parseUnits } from "viem";
 import { requireAuth } from "../middleware/auth";
 import { query } from "../lib/db";
+import { poolIdFromRegionId } from "../lib/poolId";
 
 const router = Router();
+
+const BLOCKCHAIN_BRIDGE_URL = process.env.BLOCKCHAIN_BRIDGE_URL ?? "http://127.0.0.1:4001";
 
 /**
  * GET /ngo/me — profile of the authenticated NGO (includes operated_regions)
@@ -87,6 +91,101 @@ router.post("/receipt/:id/pay", requireAuth, async (req, res) => {
     res.json(result[0]);
   } catch (err) {
     res.status(500).json({ error: "DB error", detail: String(err) });
+  }
+});
+
+/**
+ * POST /ngo/receipt/:id/vault-payout
+ * Authenticated NGO: approves pending receipts (if needed) and calls blockchain-bridge
+ * POST /reimbursement/submit so USDC moves via CrisisPoolVault.payout.
+ */
+router.post("/receipt/:id/vault-payout", requireAuth, async (req, res) => {
+  const ngoAddress = (req as typeof req & { ngoAddress: string }).ngoAddress;
+  const { id } = req.params;
+
+  try {
+    const rows = await query<{
+      id: string;
+      region_id: string;
+      requested_amount: string;
+      approved_amount: string | null;
+      status: string;
+    }>(
+      `SELECT id, region_id, requested_amount::text, approved_amount::text, status
+       FROM receipt_requests WHERE id = $1::uuid AND ngo_wallet = $2`,
+      [id, ngoAddress],
+    );
+    if (!rows.length) return res.status(404).json({ error: "Receipt not found" });
+
+    const rec = rows[0];
+    if (rec.status === "paid") {
+      return res.status(409).json({ error: "Receipt already paid" });
+    }
+    if (rec.status === "rejected") {
+      return res.status(422).json({ error: "Receipt was rejected" });
+    }
+
+    if (rec.status === "pending") {
+      await query(
+        `UPDATE receipt_requests
+         SET status = 'approved', approved_amount = requested_amount
+         WHERE id = $1::uuid AND ngo_wallet = $2`,
+        [id, ngoAddress],
+      );
+    } else if (rec.status !== "approved") {
+      return res.status(422).json({ error: `Cannot payout from status '${rec.status}'` });
+    }
+
+    const amountDecimal =
+      rec.status === "pending" ? rec.requested_amount : rec.approved_amount ?? rec.requested_amount;
+    const amountUsdc = parseUnits(amountDecimal.trim(), 6).toString();
+
+    const poolRows = await query<{ pool_id: string | null }>(
+      `SELECT pool_id::text FROM crisis_nodes WHERE region_id = $1`,
+      [rec.region_id],
+    );
+    const poolIdStr =
+      poolRows.length > 0 && poolRows[0].pool_id != null && poolRows[0].pool_id !== ""
+        ? String(poolRows[0].pool_id)
+        : poolIdFromRegionId(rec.region_id);
+    const poolId = Number(poolIdStr);
+    if (!Number.isFinite(poolId) || poolId < 0) {
+      return res.status(500).json({ error: "Invalid pool id for region" });
+    }
+
+    const bridgeUrl = `${BLOCKCHAIN_BRIDGE_URL.replace(/\/$/, "")}/reimbursement/submit`;
+    const br = await fetch(bridgeUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        receiptId: id,
+        poolId,
+        ngoWallet: ngoAddress,
+        amountUsdc,
+      }),
+    });
+    const text = await br.text();
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return res.status(502).json({
+        error: "Blockchain bridge returned non-JSON",
+        detail: text.slice(0, 500),
+      });
+    }
+    if (!br.ok) {
+      const code = br.status >= 400 && br.status < 600 ? br.status : 502;
+      return res.status(code).json({
+        error: typeof json.error === "string" ? json.error : "Bridge submit failed",
+        detail: json,
+      });
+    }
+
+    res.json(json);
+  } catch (err) {
+    console.error("[ngo/receipt/:id/vault-payout]", err);
+    res.status(500).json({ error: "Vault payout failed", detail: String(err) });
   }
 });
 
