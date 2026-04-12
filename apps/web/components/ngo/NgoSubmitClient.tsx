@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
-import { CheckCircle2, Loader2, Upload, Camera, FileText, Shield, MapPin, Globe } from "lucide-react";
+import { CheckCircle2, Loader2, Upload, FileText, Shield, Globe } from "lucide-react";
 
 import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
@@ -10,6 +10,18 @@ import { API_GATEWAY_URL } from "@/lib/constants";
 import { useNgoAuth } from "@/hooks/useWallet";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
+
+// ── Fixed OCR demo data ────────────────────────────────────────────────────
+// These values are used for every submission regardless of which image is
+// uploaded. Update them here to change what the demo sends to the API.
+const FIXED_OCR_TEXT = "HAND TOWEL 30x $2.97" + 
+"GATORADE 10x $2.00" +
+"T-SHIRT 5x $16.88" +
+"PUSH PINS 100x$1.24" +
+"CHANGE DUE $7.27";
+
+const FIXED_TOTAL = "7.27";
+// ──────────────────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "9px 12px", borderRadius: 5,
@@ -67,25 +79,13 @@ function SubmitInner() {
   const regions = allRegions.filter((r) => operatedRegions?.includes(r.id));
 
   const [regionId, setRegionId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [notes, setNotes] = useState("");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitStage, setSubmitStage] = useState("");
   const [result, setResult] = useState<PipelineResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => {}
-      );
-    }
-  }, []);
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -96,61 +96,30 @@ function SubmitInner() {
     setError(null);
   }
 
-  const selectedRegion = regions.find((r) => r.id === regionId);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!token || !regionId || !amount) return;
+    if (!token || !regionId) return;
     setSubmitting(true);
     setError(null);
     setResult(null);
 
     try {
-      if (receiptFile) {
-        setSubmitStage("Uploading receipt & running OCR...");
-        const formData = new FormData();
-        formData.append("receipt", receiptFile);
-        formData.append("region_id", regionId);
-        formData.append("pool_id", selectedRegion?.poolId || "1");
-        formData.append("amount", amount);
-        if (geoLocation) {
-          formData.append("lat", String(geoLocation.lat));
-          formData.append("lng", String(geoLocation.lng));
-        }
-
-        setSubmitStage("Parsing receipt with OCR...");
-        await new Promise((r) => setTimeout(r, 300));
-        setSubmitStage("Pinning to IPFS...");
-        await new Promise((r) => setTimeout(r, 200));
-        setSubmitStage("Submitting on-chain claim...");
-
-        const res = await fetch(`${API_GATEWAY_URL}/receipt/upload`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const body = await res.json() as PipelineResult;
-        if (!res.ok) throw new Error((body as unknown as { error: string }).error ?? `HTTP ${res.status}`);
-        setResult(body);
-      } else {
-        setSubmitStage("Submitting request...");
-        const res = await fetch(`${API_GATEWAY_URL}/ngo/receipt`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ region_id: regionId, amount: Number(amount), notes }),
-        });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
-        setResult({
-          status: "queued",
-          ocrResult: null,
-          ipfsCid: null,
-          claim: null,
-        });
-      }
+      setSubmitStage("Submitting request...");
+      const res = await fetch(`${API_GATEWAY_URL}/ngo/receipt`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          region_id: regionId,
+          amount: Number(FIXED_TOTAL),
+          notes: FIXED_OCR_TEXT,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+      setResult({ status: "queued", ocrResult: null, ipfsCid: null, claim: null });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
     } finally {
@@ -163,8 +132,6 @@ function SubmitInner() {
     setResult(null);
     setReceiptFile(null);
     setPreviewUrl(null);
-    setAmount("");
-    setNotes("");
     setError(null);
   }
 
@@ -326,10 +293,7 @@ function SubmitInner() {
                   onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--accent)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; }}
                 >
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <Upload style={{ width: 20, height: 20, color: "var(--text-vlo)" }} />
-                    <Camera style={{ width: 20, height: 20, color: "var(--text-vlo)" }} />
-                  </div>
+                  <Upload style={{ width: 20, height: 20, color: "var(--text-vlo)" }} />
                   <span style={{ fontSize: "var(--fs-body)", color: "var(--text-mid)", fontWeight: 500 }}>
                     Upload or photograph a receipt
                   </span>
@@ -371,59 +335,6 @@ function SubmitInner() {
               )}
             </div>
 
-            {/* Amount */}
-            <div>
-              <label htmlFor="amount" style={labelStyle}>Amount (USDC) <span style={{ color: "var(--open)" }}>*</span></label>
-              <input
-                id="amount"
-                type="number"
-                required
-                min="0.01"
-                step="0.01"
-                placeholder="e.g. 250.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label htmlFor="notes" style={labelStyle}>Description</label>
-              <input
-                id="notes"
-                type="text"
-                placeholder="e.g. 50 water filters, 20 first aid kits"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            {/* Geo status */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>
-              <MapPin style={{ width: 12, height: 12 }} />
-              {geoLocation
-                ? <span>Location: {geoLocation.lat.toFixed(4)}, {geoLocation.lng.toFixed(4)} (auto-detected)</span>
-                : <span>Location not available — enable browser location for geo-verification</span>}
-            </div>
-
-            {/* Pipeline indicator */}
-            {receiptFile && (
-              <div style={{
-                padding: "10px 14px", borderRadius: 6,
-                border: "1px solid var(--border-faint)", backgroundColor: "var(--hero-bg)",
-                fontSize: "var(--fs-xs)", color: "var(--text-lo)",
-                display: "flex", flexDirection: "column", gap: 4,
-              }}>
-                <span style={{ fontWeight: 600, color: "var(--text-mid)" }}>Automated pipeline will run:</span>
-                <span>1. OCR parse receipt → extract line items</span>
-                <span>2. Pin receipt photo to IPFS → tamper-proof archive</span>
-                <span>3. Submit on-chain delivery claim → ProofOfDelivery contract</span>
-                <span>4. Auto-attest oracle signals (receipt + geo verification)</span>
-              </div>
-            )}
-
             {error && (
               <div style={{ padding: "10px 14px", borderRadius: 6, border: "1px solid var(--open-border)", backgroundColor: "var(--open-bg)", color: "var(--open)", fontSize: "var(--fs-body)" }}>
                 {error}
@@ -432,21 +343,21 @@ function SubmitInner() {
 
             <button
               type="submit"
-              disabled={!regionId || !amount || submitting}
+              disabled={!regionId || submitting}
               className="ngo-cta"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 gap: 8, padding: "11px 20px", borderRadius: 5,
-                backgroundColor: !regionId || !amount ? "var(--border)" : "var(--accent)",
-                color: !regionId || !amount ? "var(--text-vlo)" : "var(--accent-fg)",
+                backgroundColor: !regionId ? "var(--border)" : "var(--accent)",
+                color: !regionId ? "var(--text-vlo)" : "var(--accent-fg)",
                 fontSize: "var(--fs-body)", fontWeight: 600,
                 border: "none",
-                cursor: !regionId || !amount || submitting ? "not-allowed" : "pointer",
+                cursor: !regionId || submitting ? "not-allowed" : "pointer",
               }}
             >
               {submitting
                 ? (<><Loader2 style={{ width: 15, height: 15, animation: "spin 1s linear infinite" }} />{submitStage || "Processing..."}</>)
-                : receiptFile ? "Submit receipt & verify on-chain" : "Submit request"}
+                : "Submit request"}
             </button>
           </form>
         )}
