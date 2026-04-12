@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { X, ExternalLink } from "lucide-react";
+import { X } from "lucide-react";
 import type { CrisisRegion } from "@/lib/api";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { formatUsdc, usePoolStats } from "@/hooks/usePoolData";
 
 interface CrisisDrawerProps {
@@ -19,62 +17,110 @@ export function CrisisDrawer({ region, onClose, onDonate }: CrisisDrawerProps) {
   if (!region) return null;
 
   return (
-    <div className="absolute right-4 top-[calc(theme(spacing.14)+theme(spacing.4))] z-[1000] w-80 flex flex-col gap-3">
-      <Card className="border-stone-800 bg-stone-900">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-stone-500">{region.country}</p>
-            <h2 className="text-lg font-bold text-stone-100">{region.name}</h2>
-          </div>
-          <button onClick={onClose} className="text-stone-500 hover:text-stone-100">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <div className="crisis-panel-enter absolute right-4 top-[calc(theme(spacing.14)+theme(spacing.4))] z-[1000] w-80">
+      {/* Glass panel */}
+      <div
+        className="relative overflow-hidden rounded-2xl border border-white/[0.07] backdrop-blur-xl"
+        style={{
+          background:
+            "linear-gradient(155deg, rgba(13,13,19,0.93) 0%, rgba(9,9,14,0.91) 100%)",
+          boxShadow:
+            "0 12px 48px rgba(0,0,0,0.65), 0 0 0 1px rgba(59,130,246,0.07), inset 0 1px 0 rgba(255,255,255,0.045)",
+        }}
+      >
+        {/* Top accent line */}
+        <div
+          className="absolute top-0 left-0 right-0 h-px pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent 0%, rgba(59,130,246,0.35) 50%, transparent 100%)",
+          }}
+        />
 
-        <p className="mt-2 text-sm leading-relaxed text-stone-300">{region.summary}</p>
-
-        {pool && (
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="rounded-lg bg-stone-800 p-2">
-              <p className="text-[10px] uppercase tracking-wide text-stone-500">Raised</p>
-              <p className="text-sm font-semibold text-green-400">${formatUsdc(pool.total_donated_raw)}</p>
+        <div className="p-5">
+          {/* ── Header ─────────────────────────────────────────── */}
+          <div className="flex items-start justify-between gap-3 mb-[18px]">
+            <div className="flex-1 min-w-0">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-400/55">
+                {region.country}
+              </p>
+              <h2 className="text-[17px] font-semibold leading-snug tracking-tight text-white/95">
+                {region.name}
+              </h2>
             </div>
-            <div className="rounded-lg bg-stone-800 p-2">
-              <p className="text-[10px] uppercase tracking-wide text-stone-500">Disbursed</p>
-              <p className="text-sm font-semibold text-blue-400">${formatUsdc(pool.total_paid_out_raw)}</p>
-            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-zinc-600 transition-all duration-150 hover:bg-white/[0.07] hover:text-zinc-300"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
-        )}
 
-        <div className="mt-3 flex gap-2">
-          {onDonate ? (
-            <Button className="flex-1 w-full" size="sm" onClick={() => onDonate(region.id)}>Donate</Button>
-          ) : (
-            <Link href={`/donate/${region.id}`} className="flex-1">
-              <Button className="w-full" size="sm">Donate</Button>
-            </Link>
-          )}
-          <Link href={`/pool/${region.id}/ledger`}>
-            <Button variant="secondary" size="sm">Ledger</Button>
-          </Link>
-        </div>
+          {/* ── Summary ────────────────────────────────────────── */}
+          <p className="text-[13px] leading-[1.7] text-zinc-400/90">
+            {region.summary}
+          </p>
 
-        {region.sourceLinks.length > 0 && (
-          <div className="mt-2 flex flex-col gap-1">
-            {region.sourceLinks.map((link) => (
-              <a
-                key={link}
-                href={link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-300"
+          {/* ── Pool stats ─────────────────────────────────────── */}
+          {pool && (
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div
+                className="rounded-xl p-3"
+                style={{
+                  background: "rgba(255,255,255,0.025)",
+                  border: "1px solid rgba(255,255,255,0.05)",
+                }}
               >
-                <ExternalLink className="h-3 w-3" /> {new URL(link).hostname}
-              </a>
-            ))}
+                <p className="mb-0.5 text-[9px] uppercase tracking-[0.16em] text-zinc-600">
+                  Raised
+                </p>
+                <p className="text-sm font-semibold text-emerald-400">
+                  ${formatUsdc(pool.total_donated_raw)}
+                </p>
+              </div>
+              <div
+                className="rounded-xl p-3"
+                style={{
+                  background: "rgba(255,255,255,0.025)",
+                  border: "1px solid rgba(255,255,255,0.05)",
+                }}
+              >
+                <p className="mb-0.5 text-[9px] uppercase tracking-[0.16em] text-zinc-600">
+                  Disbursed
+                </p>
+                <p className="text-sm font-semibold text-blue-400">
+                  ${formatUsdc(pool.total_paid_out_raw)}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Action buttons ─────────────────────────────────── */}
+          <div className="mt-4 flex gap-2">
+            {onDonate ? (
+              <button
+                onClick={() => onDonate(region.id)}
+                className="crisis-btn-donate flex-1 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white"
+              >
+                Donate
+              </button>
+            ) : (
+              <Link href={`/donate/${region.id}`} className="flex-1">
+                <button className="crisis-btn-donate w-full rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white">
+                  Donate
+                </button>
+              </Link>
+            )}
+            <Link href={`/pool/${region.id}/ledger`}>
+              <button className="crisis-btn-ledger rounded-xl px-4 py-2.5 text-[13px] font-medium text-zinc-500">
+                Ledger
+              </button>
+            </Link>
           </div>
-        )}
-      </Card>
+
+        </div>
+      </div>
     </div>
   );
 }

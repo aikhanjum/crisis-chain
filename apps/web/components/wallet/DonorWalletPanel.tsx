@@ -263,7 +263,7 @@ export function DonorWalletPanelInner({
           {regionId && (
             <Link
               href={`/pool/${regionId}/ledger`}
-              className="text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-300"
+              className="inline-flex items-center gap-1.5 rounded-full border-[3px] border-black/75 bg-zinc-700 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.13)] transition-all duration-150 hover:bg-zinc-600 active:translate-y-px"
             >
               View Pool Ledger →
             </Link>

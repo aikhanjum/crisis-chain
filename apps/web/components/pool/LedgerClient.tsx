@@ -228,13 +228,7 @@ function LedgerInner() {
         </div>
 
         {/* Footer */}
-        <div className="mt-6 flex items-center justify-between gap-4">
-          <Link
-            href={`/donate/${regionId}`}
-            className="inline-flex items-center gap-1.5 rounded-full border-[3px] border-black/75 bg-zinc-700 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.13)] transition-all duration-150 hover:bg-zinc-600 active:translate-y-px"
-          >
-            Donate to this pool →
-          </Link>
+        <div className="mt-6 flex items-center justify-end gap-4">
           <a
             href={EXPLORER_BASE_URL.replace(/\/$/, "")}
             target="_blank"
