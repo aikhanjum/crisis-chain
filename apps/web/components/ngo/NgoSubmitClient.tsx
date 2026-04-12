@@ -6,7 +6,7 @@ import { CheckCircle2, Loader2, Upload, FileText, Shield, Globe } from "lucide-r
 
 import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
-import { API_GATEWAY_URL } from "@/lib/constants";
+import { API_GATEWAY_URL, EXPLORER_BASE_URL } from "@/lib/constants";
 import { useNgoAuth } from "@/hooks/useWallet";
 import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
@@ -22,6 +22,7 @@ const FIXED_OCR_TEXT = "HAND TOWEL 30x $2.97" +
 
 const FIXED_TOTAL = "7.27";
 // ──────────────────────────────────────────────────────────────────────────
+import { useToast } from "@/components/ui/Toast";
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "9px 12px", borderRadius: 5,
@@ -37,6 +38,7 @@ const labelStyle: React.CSSProperties = {
 
 type PipelineResult = {
   status: string;
+  receiptId?: string;
   ocrResult: {
     approved_items: { name: string; quantity: number; total: number; category: string }[];
     flagged_items: { name: string; quantity: number; total: number; flag_reason: string }[];
@@ -50,12 +52,24 @@ type PipelineResult = {
     attestations: string[];
     message: string;
   } | null;
+  payout?: {
+    onChain: boolean;
+    txHash: string;
+    recipient: string;
+    amount: number;
+  };
+  pipeline?: {
+    ocr: string;
+    ipfs: string;
+    onChain: string;
+  };
 };
 
 function SubmitInner() {
   const walletAuth = useNgoAuth();
   const token = walletAuth.token;
   const isAuthenticated = walletAuth.isAuthenticated;
+  const { showToast } = useToast();
 
   const { data: allRegions = [], isLoading: regionsLoading } = useCrisisRegions();
   const [operatedRegions, setOperatedRegions] = useState<string[] | null>(null);
@@ -157,13 +171,47 @@ function SubmitInner() {
         ) : result ? (
           <div className="fu fu-2" style={{ marginTop: 28 }}>
             {/* Success state with pipeline results */}
-            <div style={{ padding: 28, border: "1px solid var(--fulfilled-border)", borderRadius: 10, backgroundColor: "var(--fulfilled-bg)", marginBottom: 16 }}>
+            <div style={{ padding: 28, border: `1px solid ${result.claim ? "var(--fulfilled-border)" : "var(--border)"}`, borderRadius: 10, backgroundColor: result.claim ? "var(--fulfilled-bg)" : "var(--surface)", marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
                 <CheckCircle2 style={{ width: 28, height: 28, color: "var(--fulfilled)" }} />
-                <p style={{ color: "var(--fulfilled)", fontSize: "1.1rem", fontWeight: 600, margin: 0 }}>
-                  {result.claim ? "Delivery claim submitted on-chain" : "Request queued"}
-                </p>
+                <div>
+                  <p style={{ color: result.claim ? "var(--fulfilled)" : "var(--text-hi)", fontSize: "1.1rem", fontWeight: 600, margin: 0 }}>
+                    {result.claim ? "Delivery claim submitted on-chain" : "Receipt saved"}
+                  </p>
+                  {result.receiptId && (
+                    <p style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)", margin: "2px 0 0", fontFamily: "var(--font-mono)" }}>
+                      ID: {result.receiptId.slice(0, 8)}…
+                    </p>
+                  )}
+                </div>
               </div>
+
+              {/* Pipeline status */}
+              {result.pipeline && (
+                <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+                  {([
+                    { key: "ocr", label: "OCR Parse", icon: FileText },
+                    { key: "ipfs", label: "IPFS Pin", icon: Globe },
+                    { key: "onChain", label: "On-chain Claim", icon: Shield },
+                  ] as const).map(({ key, label, icon: Icon }) => {
+                    const status = result.pipeline![key];
+                    const ok = status !== "unavailable";
+                    return (
+                      <div key={key} style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "5px 10px", borderRadius: 5,
+                        backgroundColor: ok ? "var(--fulfilled-bg)" : "var(--surface)",
+                        border: `1px solid ${ok ? "var(--fulfilled-border)" : "var(--border-faint)"}`,
+                        fontSize: "var(--fs-xs)", fontWeight: 600,
+                        color: ok ? "var(--fulfilled)" : "var(--text-vlo)",
+                      }}>
+                        <Icon style={{ width: 12, height: 12 }} />
+                        {label}: {ok ? status : "skipped"}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {result.claim && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
@@ -187,8 +235,14 @@ function SubmitInner() {
                 </div>
               )}
 
+              {!result.claim && result.pipeline?.onChain === "unavailable" && (
+                <p style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)", margin: "0 0 12px" }}>
+                  Receipt saved to your dashboard. On-chain verification will run when the blockchain bridge is available.
+                </p>
+              )}
+
               {result.ocrResult && (
-                <div style={{ borderTop: "1px solid var(--fulfilled-border)", paddingTop: 12 }}>
+                <div style={{ borderTop: `1px solid ${result.claim ? "var(--fulfilled-border)" : "var(--border-faint)"}`, paddingTop: 12 }}>
                   <p style={{ fontSize: "var(--fs-xs)", fontWeight: 600, color: "var(--text-lo)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
                     OCR Results
                   </p>
@@ -216,7 +270,7 @@ function SubmitInner() {
               )}
 
               {result.ipfsCid && (
-                <div style={{ borderTop: "1px solid var(--fulfilled-border)", paddingTop: 10, marginTop: 10 }}>
+                <div style={{ borderTop: `1px solid ${result.claim ? "var(--fulfilled-border)" : "var(--border-faint)"}`, paddingTop: 10, marginTop: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Globe style={{ width: 14, height: 14, color: "var(--text-lo)" }} />
                     <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-vlo)" }}>
@@ -338,6 +392,26 @@ function SubmitInner() {
             {error && (
               <div style={{ padding: "10px 14px", borderRadius: 6, border: "1px solid var(--open-border)", backgroundColor: "var(--open-bg)", color: "var(--open)", fontSize: "var(--fs-body)" }}>
                 {error}
+              </div>
+            )}
+
+            {submitting && receiptFile && (
+              <div style={{
+                padding: "12px 14px", borderRadius: 6,
+                border: "1px solid var(--border-faint)", backgroundColor: "var(--surface)",
+                fontSize: "var(--fs-ui)", color: "var(--text-lo)", lineHeight: 1.5,
+              }}>
+                <span style={{ display: "block", marginBottom: 8, color: "var(--text-mid)" }}>
+                  Processing can take a few seconds. You can watch status on your dashboard without waiting here.
+                </span>
+                <Link
+                  href="/ngo/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--accent-text)", fontWeight: 600, textDecoration: "none" }}
+                >
+                  Open dashboard in new tab →
+                </Link>
               </div>
             )}
 

@@ -23,6 +23,13 @@ export const erc20Abi = [
 export const vaultAbi = [
   {
     type: "function",
+    stateMutability: "view",
+    name: "poolBalances",
+    inputs: [{ name: "poolId", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
     stateMutability: "nonpayable",
     name: "donate",
     inputs: [

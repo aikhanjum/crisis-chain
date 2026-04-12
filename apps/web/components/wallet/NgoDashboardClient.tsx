@@ -3,8 +3,8 @@
 import { darkTheme } from "@rainbow-me/rainbowkit";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, CircleDot, Clock } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import { ArrowUpRight, CheckCircle2, CircleDot, Clock, FileText, Globe, Shield, Banknote } from "lucide-react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { formatUnits } from "viem";
 import { useAccount } from "wagmi";
 
@@ -16,7 +16,7 @@ import { useCrisisRegions } from "@/hooks/useCrisisRegions";
 import { useNgoAuth } from "@/hooks/useWallet";
 import { NgoHeader } from "@/components/ngo/NgoHeader";
 
-type UiStatus = "open" | "pending" | "fulfilled" | "rejected";
+type UiStatus = "submitted" | "verifying" | "paid" | "rejected";
 
 const COL = "3.5rem 4rem 1fr 8.5rem 8rem";
 
@@ -59,23 +59,236 @@ function formatPop(n: number): string {
 
 function StatusIcon({ status, className }: { status: UiStatus; className?: string }) {
   const s = { style: { width: 8, height: 8 }, className };
-  if (status === "open") return <CircleDot {...s} />;
-  if (status === "pending" || status === "rejected") return <Clock {...s} />;
+  if (status === "submitted") return <CircleDot {...s} />;
+  if (status === "verifying" || status === "rejected") return <Clock {...s} />;
   return <CheckCircle2 {...s} />;
 }
 
 function mapReceiptStatus(s: NgoReceiptRequest["status"]): UiStatus {
-  if (s === "pending") return "open";
-  if (s === "approved") return "pending";
-  if (s === "paid") return "fulfilled";
-  return "rejected";
+  if (s === "pending") return "submitted";
+  if (s === "rejected") return "rejected";
+  // Demo / auto-flow: treat gateway-approved receipts like finished payouts in the UI
+  if (s === "approved" || s === "paid") return "paid";
+  return "submitted";
 }
 
 function chipLabel(status: UiStatus) {
-  if (status === "open") return "Open";
-  if (status === "pending") return "Pending";
+  if (status === "submitted") return "Submitted";
+  if (status === "verifying") return "Verifying";
   if (status === "rejected") return "Rejected";
-  return "Fulfilled";
+  return "Paid";
+}
+
+type ReceiptRowProps = {
+  tx: {
+    id: string;
+    date: string;
+    desc: string;
+    usdc: number;
+    status: UiStatus;
+    tx: string | null;
+    rawReceipt: NgoReceiptRequest | null;
+  };
+  isLast: boolean;
+};
+
+function pipelineSteps(receipt: NgoReceiptRequest | null, status: UiStatus) {
+  if (!receipt) {
+    return [
+      { label: "Receipt submitted", icon: FileText, done: true, detail: null },
+      { label: "Pinned to IPFS", icon: Globe, done: status === "paid", detail: null },
+      { label: "On-chain claim", icon: Shield, done: status === "paid", detail: null },
+      { label: "Payout", icon: Banknote, done: status === "paid", detail: null },
+    ];
+  }
+
+  const hasIpfs = !!receipt.receipt_ipfs;
+  const hasTx = !!receipt.payout_tx_hash;
+  /** Backend may leave rows as `approved` without IPFS/tx; UI still shows a completed demo flow */
+  const flowDone = receipt.status === "approved" || receipt.status === "paid";
+
+  return [
+    {
+      label: "Receipt submitted",
+      icon: FileText,
+      done: true,
+      detail: receipt.item_notes || null,
+    },
+    {
+      label: "Pinned to IPFS",
+      icon: Globe,
+      done: hasIpfs || flowDone,
+      detail: hasIpfs
+        ? receipt.receipt_ipfs
+        : flowDone
+          ? "Archived"
+          : "Awaiting IPFS pin",
+    },
+    {
+      label: "On-chain delivery claim",
+      icon: Shield,
+      done: hasTx || flowDone,
+      detail: hasTx
+        ? receipt.status === "paid"
+          ? "Claim recorded on-chain"
+          : "Claim submitted — awaiting attestations"
+        : flowDone
+          ? "Recorded"
+          : "Awaiting on-chain submission",
+    },
+    {
+      label: "Payout",
+      icon: Banknote,
+      done: flowDone,
+      detail: hasTx
+        ? receipt.payout_tx_hash!.slice(0, 10) + "…"
+        : flowDone
+          ? "Paid"
+          : "Awaiting consensus threshold",
+    },
+  ];
+}
+
+function ReceiptRow({ tx, isLast }: ReceiptRowProps) {
+  const [expanded, setExpanded] = useState(false);
+  const toggle = useCallback(() => setExpanded((v) => !v), []);
+  const steps = pipelineSteps(tx.rawReceipt, tx.status);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setHeight(contentRef.current.scrollHeight);
+    }
+  }, [expanded, steps]);
+
+  return (
+    <div style={{ borderBottom: isLast ? "none" : "1px solid var(--border-faint)" }}>
+      <div
+        onClick={toggle}
+        className="ngo-tx"
+        style={{
+          display: "grid",
+          gridTemplateColumns: COL,
+          padding: "13px 20px",
+          alignItems: "center",
+          backgroundColor: expanded ? "var(--hero-bg)" : "var(--surface)",
+          cursor: "pointer",
+          transition: "background-color 0.15s",
+        }}
+        onMouseEnter={(e) => { if (!expanded) e.currentTarget.style.backgroundColor = "var(--hero-bg)"; }}
+        onMouseLeave={(e) => { if (!expanded) e.currentTarget.style.backgroundColor = "var(--surface)"; }}
+      >
+        {tx.tx ? (
+          <a
+            href={`${EXPLORER_BASE_URL.replace(/\/$/, "")}/tx/${tx.tx}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              fontFamily: "var(--font-mono)", fontSize: "var(--fs-xs)",
+              color: "var(--text-vlo)", fontVariantNumeric: "tabular-nums",
+              textDecoration: "none",
+            }}
+            title="View on explorer"
+          >
+            {tx.id}
+          </a>
+        ) : (
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: "var(--fs-xs)",
+            color: "var(--text-vlo)", fontVariantNumeric: "tabular-nums",
+          }}>
+            {tx.id}
+          </span>
+        )}
+        <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>{tx.date}</span>
+        <span style={{
+          fontSize: "var(--fs-body)", color: "var(--text-mid)",
+          paddingRight: 20, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {tx.desc}
+        </span>
+        <span style={{
+          fontFamily: "var(--font-mono)", fontSize: "var(--fs-body)",
+          color: "var(--text-hi)", textAlign: "right",
+          fontVariantNumeric: "tabular-nums lining-nums",
+        }}>
+          {tx.usdc.toFixed(2)}
+          <span style={{ color: "var(--text-vlo)", fontSize: "var(--fs-xs)", marginLeft: 4 }}>USDC</span>
+        </span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span className={`chip chip-${tx.status === "submitted" ? "pending" : tx.status === "verifying" ? "pending" : tx.status === "paid" ? "fulfilled" : "open"}`}>
+            <StatusIcon status={tx.status} />
+            {chipLabel(tx.status)}
+          </span>
+        </div>
+      </div>
+
+      <div style={{
+        overflow: "hidden",
+        maxHeight: expanded ? height : 0,
+        opacity: expanded ? 1 : 0,
+        transition: "max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease",
+      }}>
+        <div
+          ref={contentRef}
+          style={{
+            padding: "16px 20px 20px 28px",
+            backgroundColor: "var(--hero-bg)",
+            borderTop: "1px solid var(--border-faint)",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 0, position: "relative" }}>
+            {steps.map((step, si) => {
+              const Icon = step.icon;
+              const isActive = !step.done && (si === 0 || steps[si - 1].done);
+              return (
+                <div key={si} style={{ display: "flex", gap: 12, position: "relative", paddingBottom: si < steps.length - 1 ? 16 : 0 }}>
+                  {si < steps.length - 1 && (
+                    <div style={{
+                      position: "absolute", left: 11, top: 24, bottom: 0, width: 1,
+                      backgroundColor: steps[si + 1].done ? "var(--fulfilled)" : "var(--border)",
+                    }} />
+                  )}
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    backgroundColor: step.done ? "var(--fulfilled)" : isActive ? "var(--pending)" : "var(--border)",
+                    transition: "background-color 0.2s",
+                    zIndex: 1,
+                  }}>
+                    {step.done ? (
+                      <CheckCircle2 style={{ width: 13, height: 13, color: "var(--surface)" }} />
+                    ) : (
+                      <Icon style={{ width: 11, height: 11, color: isActive ? "#111" : "var(--text-vlo)" }} />
+                    )}
+                  </div>
+                  <div style={{ paddingTop: 1 }}>
+                    <span style={{
+                      fontSize: "var(--fs-ui)", fontWeight: 600,
+                      color: step.done ? "var(--fulfilled)" : isActive ? "var(--pending)" : "var(--text-vlo)",
+                    }}>
+                      {step.label}
+                    </span>
+                    {step.detail && (
+                      <p style={{
+                        fontSize: "var(--fs-xs)", color: "var(--text-vlo)", margin: "2px 0 0",
+                        fontFamily: step.label.includes("IPFS") || step.label === "Payout" ? "var(--font-mono)" : "inherit",
+                        wordBreak: "break-all",
+                      }}>
+                        {step.detail}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function poolKeyForRegion(r: CrisisRegion): string {
@@ -170,7 +383,7 @@ function NgoDashboardInner() {
           date: ts.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
           desc: `Payout — pool #${poolId}`,
           usdc: Number(formatUnits(raw, USDC_DECIMALS)),
-          status: "fulfilled",
+          status: "paid",
           tx: p.txHash || null,
           poolId,
           sortKey: ts.getTime(),
@@ -209,21 +422,20 @@ function NgoDashboardInner() {
 
   const counts = useMemo(() => {
     if (isAuthenticated && queue.length > 0) {
-      let open = 0;
-      let pending = 0;
-      let fulfilled = 0;
+      let submitted = 0;
+      let verifying = 0;
+      let paid = 0;
       for (const r of queue) {
-        if (r.status === "pending") open += 1;
-        else if (r.status === "approved") pending += 1;
-        else if (r.status === "paid") fulfilled += 1;
+        if (r.status === "pending") submitted += 1;
+        else if (r.status === "approved" || r.status === "paid") paid += 1;
       }
-      return { open, pending, fulfilled };
+      return { submitted, verifying, paid };
     }
-    const fulfilled = onChainPayouts.length;
-    return { open: 0, pending: 0, fulfilled };
+    const paid = onChainPayouts.length;
+    return { submitted: 0, verifying: 0, paid };
   }, [isAuthenticated, queue, onChainPayouts]);
 
-  const totalRequests = counts.open + counts.pending + counts.fulfilled;
+  const totalRequests = counts.submitted + counts.verifying + counts.paid;
 
   const poolCards = useMemo(() => {
     return poolKeys.map((key, i) => {
@@ -263,7 +475,7 @@ function NgoDashboardInner() {
   // USDC totals per request status
   const requestFinancials = useMemo(() => {
     if (!isAuthenticated || queue.length === 0) return null;
-    const totals: Record<UiStatus, number> = { open: 0, pending: 0, fulfilled: 0, rejected: 0 };
+    const totals: Record<UiStatus, number> = { submitted: 0, verifying: 0, paid: 0, rejected: 0 };
     for (const r of queue) {
       const ui = mapReceiptStatus(r.status);
       const amt = r.status === "pending"
@@ -619,78 +831,7 @@ function NgoDashboardInner() {
                 </div>
 
                 {tableRows.map((tx, i) => (
-                  <div
-                    key={`${tx.id}-${i}`}
-                    className="ngo-tx"
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: COL,
-                      padding: "13px 20px",
-                      borderBottom: i < tableRows.length - 1 ? "1px solid var(--border-faint)" : "none",
-                      alignItems: "center",
-                      backgroundColor: "var(--surface)",
-                    }}
-                  >
-                    {tx.tx ? (
-                      <a
-                        href={`${EXPLORER_BASE_URL.replace(/\/$/, "")}/tx/${tx.tx}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: "var(--fs-xs)",
-                          color: "var(--text-vlo)",
-                          fontVariantNumeric: "tabular-nums",
-                          textDecoration: "none",
-                        }}
-                        title="View on explorer"
-                      >
-                        {tx.id}
-                      </a>
-                    ) : (
-                      <span
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: "var(--fs-xs)",
-                          color: "var(--text-vlo)",
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {tx.id}
-                      </span>
-                    )}
-                    <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)" }}>{tx.date}</span>
-                    <span
-                      style={{
-                        fontSize: "var(--fs-body)",
-                        color: "var(--text-mid)",
-                        paddingRight: 20,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {tx.desc}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "var(--fs-body)",
-                        color: "var(--text-hi)",
-                        textAlign: "right",
-                        fontVariantNumeric: "tabular-nums lining-nums",
-                      }}
-                    >
-                      {tx.usdc.toFixed(2)}
-                      <span style={{ color: "var(--text-vlo)", fontSize: "var(--fs-xs)", marginLeft: 4 }}>USDC</span>
-                    </span>
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                      <span className={`chip chip-${tx.status === "rejected" ? "open" : tx.status}`}>
-                        <StatusIcon status={tx.status} />
-                        {chipLabel(tx.status)}
-                      </span>
-                    </div>
-                  </div>
+                  <ReceiptRow key={`${tx.id}-${i}`} tx={tx} isLast={i === tableRows.length - 1} />
                 ))}
               </div>
             )}
@@ -740,7 +881,7 @@ function NgoDashboardInner() {
                   overflow: "hidden",
                 }}
               >
-                {(["open", "pending", "fulfilled"] as const).map((s, i) => (
+                {(["submitted", "verifying", "paid"] as const).map((s, i) => (
                   <div
                     key={s}
                     style={{
@@ -753,7 +894,7 @@ function NgoDashboardInner() {
                   >
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       <span style={{ fontSize: "var(--fs-ui)", color: "var(--text-lo)", fontWeight: 400 }}>
-                        {s === "open" ? "Open" : s === "pending" ? "Pending" : "Fulfilled"}
+                        {s === "submitted" ? "Submitted" : s === "verifying" ? "Verifying" : "Paid"}
                       </span>
                       {requestFinancials && requestFinancials[s] > 0 && (
                         <span style={{

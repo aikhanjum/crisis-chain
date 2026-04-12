@@ -4,6 +4,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import type { CrisisRegion } from "@/lib/api";
 import { formatUsdc, usePoolStats } from "@/hooks/usePoolData";
+import { poolIdFromRegionId } from "@/lib/wallet-utils";
 
 interface CrisisDrawerProps {
   region: CrisisRegion | null;
@@ -12,7 +13,8 @@ interface CrisisDrawerProps {
 }
 
 export function CrisisDrawer({ region, onClose, onDonate }: CrisisDrawerProps) {
-  const { data: pool } = usePoolStats(region?.id ?? "");
+  const poolId = region?.poolId ?? poolIdFromRegionId(region?.id ?? "");
+  const { data: pool } = usePoolStats(poolId);
 
   if (!region) return null;
 

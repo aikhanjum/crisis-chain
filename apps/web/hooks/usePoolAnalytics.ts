@@ -28,9 +28,14 @@ export function usePoolAnalytics(poolId: string) {
     }
   }, [poolId]);
 
+  const applySnapshot = useCallback((stats: PoolStats) => {
+    setData(stats);
+    setError(null);
+  }, []);
+
   useEffect(() => {
     refresh().catch(() => undefined);
   }, [refresh]);
 
-  return { data, loading, error, refresh };
+  return { data, loading, error, refresh, applySnapshot };
 }

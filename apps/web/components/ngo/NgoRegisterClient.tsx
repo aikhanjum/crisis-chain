@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { CheckCircle2, Loader2, Wallet } from "lucide-react";
@@ -55,29 +55,71 @@ function RegisterInner() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [isExisting, setIsExisting] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  useEffect(() => {
+    if (!walletAuth.token) { setIsExisting(false); return; }
+    setProfileLoading(true);
+    fetch(`${API_GATEWAY_URL}/ngo/me`, {
+      headers: { Authorization: `Bearer ${walletAuth.token}` },
+    })
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((p: { org_name?: string; country?: string; reg_number?: string; contact_email?: string; operated_regions?: string[] }) => {
+        setIsExisting(true);
+        if (p.org_name) setOrgName(p.org_name);
+        if (p.country) setCountry(p.country);
+        if (p.reg_number) setRegNumber(p.reg_number);
+        if (p.contact_email) setContactEmail(p.contact_email);
+        if (Array.isArray(p.operated_regions) && p.operated_regions.length > 0) setSelectedRegions(p.operated_regions);
+      })
+      .catch(() => setIsExisting(false))
+      .finally(() => setProfileLoading(false));
+  }, [walletAuth.token]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!address || !orgName) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`${API_GATEWAY_URL}/ngo/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orgName,
-          country: country || null,
-          regNumber: regNumber || null,
-          contactEmail: contactEmail || null,
-          regions: selectedRegions.length > 0 ? selectedRegions : null,
-          walletAddress: address,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
-      setSuccess(true);
+      if (isExisting) {
+        const res = await fetch(`${API_GATEWAY_URL}/ngo/profile`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${walletAuth.token}`,
+          },
+          body: JSON.stringify({
+            orgName,
+            country: country || null,
+            regNumber: regNumber || null,
+            contactEmail: contactEmail || null,
+            regions: selectedRegions.length > 0 ? selectedRegions : null,
+          }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+        setSuccess(true);
+      } else {
+        const res = await fetch(`${API_GATEWAY_URL}/ngo/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orgName,
+            country: country || null,
+            regNumber: regNumber || null,
+            contactEmail: contactEmail || null,
+            regions: selectedRegions.length > 0 ? selectedRegions : null,
+            walletAddress: address,
+          }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+        setSuccess(true);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Registration failed");
+      setError(e instanceof Error ? e.message : "Submission failed");
     } finally {
       setSubmitting(false);
     }
@@ -109,6 +151,17 @@ function RegisterInner() {
       <NgoHeader />
 
       <div style={{ maxWidth: 500, margin: "0 auto", padding: "48px 32px 96px" }}>
+
+        <div className="fu fu-1" style={{ marginBottom: 32 }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--text-hi)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+            {isExisting ? "Edit your profile" : "Register your NGO"}
+          </h1>
+          <p style={{ fontSize: "var(--fs-body)", color: "var(--text-mid)", lineHeight: 1.6, marginTop: 8 }}>
+            {isExisting
+              ? "Update your organisation details below."
+              : "Connect your wallet and provide organisation details. An admin will review and whitelist your address for pool access."}
+          </p>
+        </div>
 
         {/* ── Wallet / Auth card ─────────────────────────────── */}
         <div className="fu fu-1 ngo-card" style={{ padding: "20px 24px", marginBottom: 32, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -155,15 +208,6 @@ function RegisterInner() {
               </button>
             </div>
           )}
-        </div>
-
-        <div className="fu fu-1" style={{ marginBottom: 32 }}>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--text-hi)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-            Register your NGO
-          </h1>
-          <p style={{ fontSize: "var(--fs-body)", color: "var(--text-mid)", lineHeight: 1.6, marginTop: 8 }}>
-            Connect your wallet and provide organisation details. An admin will review and whitelist your address for pool access.
-          </p>
         </div>
 
         {!isConnected ? (
@@ -223,9 +267,13 @@ function RegisterInner() {
         ) : success ? (
           <div className="fu fu-1 ngo-card" style={{ padding: 36, textAlign: "center", borderColor: "var(--fulfilled-border)", backgroundColor: "var(--fulfilled-bg)" }}>
             <CheckCircle2 style={{ width: 48, height: 48, color: "var(--fulfilled)", margin: "0 auto 16px" }} />
-            <p style={{ color: "var(--text-hi)", fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.01em" }}>Application received</p>
+            <p style={{ color: "var(--text-hi)", fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.01em" }}>
+              {isExisting ? "Profile updated" : "Application received"}
+            </p>
             <p style={{ color: "var(--text-lo)", fontSize: "var(--fs-body)", marginTop: 8, lineHeight: 1.6 }}>
-              An admin will review your registration and approve your wallet for pool access.
+              {isExisting
+                ? "Your organisation details have been saved."
+                : "An admin will review your registration and approve your wallet for pool access."}
             </p>
             <Link
               href="/ngo/dashboard"
@@ -406,8 +454,8 @@ function RegisterInner() {
               }}
             >
               {submitting
-                ? <><Loader2 style={{ width: 15, height: 15, animation: "spin 1s linear infinite" }} />Submitting…</>
-                : "Submit application"
+                ? <><Loader2 style={{ width: 15, height: 15, animation: "spin 1s linear infinite" }} />Saving…</>
+                : isExisting ? "Save changes" : "Submit application"
               }
             </button>
           </form>

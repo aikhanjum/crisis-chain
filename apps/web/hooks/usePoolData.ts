@@ -17,6 +17,7 @@ export function usePoolLedger(regionId: string) {
   return useQuery({
     queryKey: ["pool", regionId, "ledger"],
     queryFn: () => getPoolLedger(regionId),
+    refetchInterval: 15_000,
     enabled: !!regionId,
   });
 }

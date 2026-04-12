@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useCallback } from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { ConnectButton, darkTheme } from "@rainbow-me/rainbowkit";
 import { RefreshCw, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -39,16 +39,26 @@ function MapPageInner() {
       <header className="absolute top-0 left-0 right-0 z-20 flex h-14 items-center justify-between px-5"
         style={{ background: "linear-gradient(to bottom, rgba(12,10,9,0.85) 0%, transparent 100%)" }}>
         <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2">
-            <img src="/favicon.svg" alt="CrisisChain" className="h-8 w-8" />
-            <span className="font-bold text-white text-sm tracking-wide">CrisisChain</span>
+          <Link href="/" className="flex items-center gap-2.5 font-sans no-underline">
+            <img src="/favicon.svg" alt="CrisisChain" className="h-7 w-7 shrink-0" width={28} height={28} />
+            <div className="leading-none">
+              <span
+                className="text-[0.9375rem] font-semibold text-white"
+                style={{ letterSpacing: "-0.01em" }}
+              >
+                CrisisChain
+              </span>
+              <span className="select-none text-[0.75rem] text-zinc-500" style={{ margin: "0 5px" }}>
+                /
+              </span>
+              <span className="text-[0.8125rem] font-normal text-zinc-400">Global Crisis Monitor</span>
+            </div>
           </Link>
-          <span className="text-[11px] text-stone-500 uppercase tracking-widest">Global Crisis Monitor</span>
         </div>
         <div className="flex items-center gap-2">
           <Link
             href="/ngo/dashboard"
-            className="rounded-xl border border-white/[0.08] bg-white/[0.05] px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-400 backdrop-blur-sm transition-all duration-150 hover:bg-white/[0.10] hover:border-white/[0.14] hover:text-zinc-200 active:scale-[0.97]"
+            className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-3.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500 backdrop-blur-xl transition-all duration-150 hover:bg-white/[0.07] hover:border-white/[0.10] hover:text-zinc-300 active:scale-[0.97]"
           >
             NGO Portal
           </Link>
@@ -60,26 +70,26 @@ function MapPageInner() {
                   {!connected ? (
                     <button
                       onClick={openConnectModal}
-                      className="rounded-xl border border-amber-400/25 bg-gradient-to-br from-amber-400/10 to-orange-500/8 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-amber-200/80 backdrop-blur-sm transition-all duration-150 hover:border-amber-400/40 hover:from-amber-400/18 hover:to-orange-500/14 hover:text-amber-100 active:scale-[0.97]"
+                      className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400 backdrop-blur-xl transition-all duration-150 hover:bg-white/[0.08] hover:border-white/[0.12] hover:text-zinc-200 active:scale-[0.97]"
                     >
                       Connect Wallet
                     </button>
                   ) : chain.unsupported ? (
                     <button
                       onClick={openChainModal}
-                      className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-red-300/90 backdrop-blur-sm transition-all duration-150 hover:bg-red-500/18 hover:border-red-400/45 active:scale-[0.97]"
+                      className="rounded-lg border border-red-500/20 bg-red-500/[0.06] px-3.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-red-400/80 backdrop-blur-xl transition-all duration-150 hover:bg-red-500/[0.12] hover:border-red-400/30 hover:text-red-300 active:scale-[0.97]"
                     >
                       Wrong Network
                     </button>
                   ) : (
                     <button
                       onClick={openAccountModal}
-                      className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.05] px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-300 backdrop-blur-sm transition-all duration-150 hover:bg-white/[0.10] hover:border-white/[0.14] hover:text-white active:scale-[0.97]"
+                      className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3.5 py-1.5 text-[10px] font-medium tracking-[0.06em] text-zinc-400 backdrop-blur-xl transition-all duration-150 hover:bg-white/[0.07] hover:border-white/[0.10] hover:text-zinc-200 active:scale-[0.97]"
                     >
                       {chain.hasIcon && chain.iconUrl && (
                         <img src={chain.iconUrl} alt={chain.name} className="h-3 w-3 rounded-full" />
                       )}
-                      <span>{account.displayName}</span>
+                      <span className="font-mono">{account.displayName}</span>
                     </button>
                   )}
                 </div>
@@ -129,28 +139,6 @@ function MapPageInner() {
         </button>
       </div>
 
-      {/* Region count badge */}
-      {regions && regions.length > 0 && (() => {
-        const avgScore = regions.reduce((sum, r) => sum + r.severityScore, 0) / regions.length;
-        const t = Math.max(0, Math.min(1, avgScore / 100));
-        // hue slides from 48° (yellow) → 0° (red) as severity rises
-        const hue = Math.round(48 * (1 - t));
-        const dotStyle = { backgroundColor: `hsl(${hue}, 90%, 58%)` };
-        const pingStyle = { backgroundColor: `hsla(${hue}, 90%, 58%, 0.5)` };
-        return (
-          <div className="absolute bottom-6 right-6 z-10 flex items-center gap-4 rounded-2xl border border-white/[0.07] bg-zinc-900/60 px-5 py-4 backdrop-blur-xl shadow-[0_4px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-3xl font-extralight tabular-nums leading-none tracking-tight text-white/90">{regions.length}</span>
-              <span className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">active crisis regions</span>
-            </div>
-            <div className="relative h-2.5 w-2.5 flex-shrink-0">
-              <span className="absolute inset-0 animate-ping rounded-full" style={pingStyle} />
-              <span className="relative flex h-2.5 w-2.5 rounded-full" style={dotStyle} />
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Donate modal overlay */}
       {donateRegionId && (
         <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -178,7 +166,7 @@ function MapPageInner() {
 
 export default function MapPageClient() {
   return (
-    <Web3Provider>
+    <Web3Provider theme={darkTheme()}>
       <MapPageInner />
     </Web3Provider>
   );

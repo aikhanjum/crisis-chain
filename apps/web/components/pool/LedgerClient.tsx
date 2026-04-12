@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useMemo, useState, useCallback } from "react";
 import { ArrowDownLeft, ArrowUpRight, Copy, Check, ExternalLink } from "lucide-react";
 
+import { darkTheme } from "@rainbow-me/rainbowkit";
 import { Web3Provider } from "@/providers/Web3Provider";
 import { EXPLORER_BASE_URL } from "@/lib/constants";
 import { usePoolLedger, formatUsdc } from "@/hooks/usePoolData";
@@ -246,7 +247,7 @@ function LedgerInner() {
 
 export default function LedgerClient() {
   return (
-    <Web3Provider>
+    <Web3Provider theme={darkTheme()}>
       <LedgerInner />
     </Web3Provider>
   );

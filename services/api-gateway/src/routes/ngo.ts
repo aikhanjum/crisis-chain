@@ -11,7 +11,7 @@ router.get("/me", requireAuth, async (req, res) => {
   const ngoAddress = (req as typeof req & { ngoAddress: string }).ngoAddress;
   try {
     const rows = await query(
-      `SELECT wallet_address, org_name, country, operated_regions, contact_email, status
+      `SELECT wallet_address, org_name, country, reg_number, operated_regions, contact_email, status
        FROM ngos WHERE wallet_address = $1`,
       [ngoAddress],
     );
@@ -91,6 +91,30 @@ router.post("/receipt/:id/pay", requireAuth, async (req, res) => {
 });
 
 /**
+ * PATCH /ngo/profile — update existing NGO profile (authenticated)
+ */
+router.patch("/profile", requireAuth, async (req, res) => {
+  const ngoAddress = (req as typeof req & { ngoAddress: string }).ngoAddress;
+  const { orgName, country, regNumber, regions, contactEmail } = req.body;
+  if (!orgName) {
+    return res.status(400).json({ error: "orgName is required" });
+  }
+  try {
+    const result = await query(
+      `UPDATE ngos
+       SET org_name = $1, country = $2, reg_number = $3, operated_regions = $4, contact_email = $5
+       WHERE wallet_address = $6
+       RETURNING wallet_address, org_name, country, status`,
+      [orgName, country || null, regNumber || null, regions || '{}', contactEmail || null, ngoAddress],
+    );
+    if (!result.length) return res.status(404).json({ error: "NGO not found" });
+    res.json({ status: "profile_updated", profile: result[0] });
+  } catch (err) {
+    res.status(500).json({ error: "DB error", detail: String(err) });
+  }
+});
+
+/**
  * POST /ngo/register — submit NGO registration application
  */
 router.post("/register", async (req, res) => {
@@ -98,12 +122,22 @@ router.post("/register", async (req, res) => {
   if (!orgName || !walletAddress) {
     return res.status(400).json({ error: "orgName and walletAddress required" });
   }
+  const normalizedWallet = walletAddress.toLowerCase();
   try {
+    const existing = await query(
+      `SELECT org_name, status FROM ngos WHERE wallet_address = $1`,
+      [normalizedWallet],
+    );
+    if (existing.length > 0) {
+      const row = existing[0] as { org_name: string; status: string };
+      return res.status(409).json({
+        error: `This wallet is already registered to "${row.org_name}" (${row.status}). Each wallet can only be linked to one NGO.`,
+      });
+    }
     await query(
       `INSERT INTO ngos (wallet_address, org_name, country, reg_number, operated_regions, contact_email, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-       ON CONFLICT (wallet_address) DO NOTHING`,
-      [walletAddress.toLowerCase(), orgName, country, regNumber, regions, contactEmail],
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+      [normalizedWallet, orgName, country, regNumber, regions, contactEmail],
     );
     res.json({ status: "application_received" });
   } catch (err) {
