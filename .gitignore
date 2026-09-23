@@ -16,3 +16,10 @@ contracts/out/
 contracts/broadcast/
 node_modules/
 .worktrees/
+
+# OS, editor and tool noise
+.DS_Store
+__pycache__/
+*.pyc
+.playwright-mcp/
+.cursor/

@@ -22,7 +22,7 @@ export type ReimbursementParams = {
   poolId: number;
   ngoWallet: `0x${string}`;
   amountUsdc: bigint;          // in USDC base units (6 decimals)
-  receiptCid: string;          // IPFS CID — pinned before calling this
+  receiptCid?: string;         // IPFS CID if pinned; receiptId is the on-chain ref otherwise
 };
 
 export async function submitReimbursement(params: ReimbursementParams): Promise<Hash> {
