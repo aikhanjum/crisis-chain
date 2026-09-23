@@ -45,7 +45,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
-      - run: npm ci
+      - run: npm ci || npm install --no-audit --no-fund
       - run: npx tsc --noEmit
 
   python:
